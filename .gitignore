@@ -1,0 +1,97 @@
+# Environment & secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+*.so
+
+# uv
+.python-version
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# mypy / type checkers
+.mypy_cache/
+.dmypy.json
+.pytype/
+
+# Ruff
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Docker
+docker-compose.override.yml.local
+
+# Data & staging (large files never go in git)
+data/
+staging/
+*.tif
+*.tiff
+*.geotiff
+*.gpkg
+*.gdb/
+*.gdb
+*.zip
+*.tar.gz
+*.tar
+*.gz
+*.shp
+*.dbf
+*.shx
+*.prj
+*.cpg
+*.sbn
+*.sbx
+*.fbn
+*.fbx
+*.ain
+*.aih
+*.atx
+*.ixs
+*.mxs
+*.ovr
+*.aux.xml
+*.qmd
+*.csv.gz
+
+# Generated reports
+reports/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Mapbox / generated images
+*.png.tmp
+map_cache/
