@@ -1,0 +1,14 @@
+# Local development overrides — loaded automatically by `docker compose up`
+# Do NOT commit secrets or machine-specific paths here.
+services:
+  prefect-worker:
+    volumes:
+      # Overwrite the read-only bind from the built image with a writable mount
+      # so code changes are reflected immediately without rebuilding.
+      - ./plinth:/app/plinth
+      - ./tests:/app/tests
+      - ./staging:/staging   # local staging dir (created by bootstrap.sh)
+    # Keep the worker process running in dev so you can exec into it:
+    #   docker compose exec prefect-worker uv run plinth-cli db migrate
+    # Override CMD to idle if you don't want the Prefect worker consuming a pool slot:
+    # command: sleep infinity

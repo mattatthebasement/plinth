@@ -1,0 +1,40 @@
+FROM python:3.12-slim
+
+# Install GDAL and required system libraries.
+# GDAL must be present before Python packages that wrap it (rasterio) are installed.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gdal-bin \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    libspatialindex-dev \
+    curl \
+    wget \
+    unzip \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+WORKDIR /app
+
+# Copy dependency manifest first so Docker can cache the install layer
+# independently of source-code changes.
+COPY pyproject.toml ./
+COPY uv.lock* ./
+
+# Install all runtime dependencies (no dev extras).
+# uv creates a project-local .venv and installs the plinth package in editable
+# mode, so mounting ./plinth in docker-compose.override.yml picks up changes
+# without a rebuild.
+RUN uv sync --no-dev
+
+# Copy application source
+COPY plinth/ ./plinth/
+COPY scripts/ ./scripts/
+
+# Start the Prefect process worker so this container can execute flows.
+# The work pool "plinth-pool" is created by bootstrap.sh on first run.
+CMD ["uv", "run", "prefect", "worker", "start", "--pool", "plinth-pool", "--type", "process"]
