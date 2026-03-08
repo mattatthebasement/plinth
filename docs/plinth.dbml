@@ -294,6 +294,32 @@ Table noaa_climate_normals {
   Note: 'NOAA 1991-2020 Climate Normals (monthly, per station). Source: NCEI bulk archive. Decadal refresh.'
 }
 
+// ─── Phase 2: FCC Broadband ───────────────────────────────────────────────────
+
+Table fcc_broadband_coverage {
+  id                       serial  [pk]
+  location_id              bigint  [not null, note: 'FCC fabric location_id']
+  provider_id              text    [not null, note: 'FCC provider (FRN)']
+  brand_name               text
+  technology_code          integer [not null, note: '10=Copper, 40=Cable, 50=Fiber, 70=Unlicensed FW, 71=Licensed FW, 72=LBR FW (60/61 satellite excluded)']
+  max_download_mbps        integer
+  max_upload_mbps          integer
+  low_latency              boolean
+  business_residential_code text   [note: 'R=Residential, X=Both (B=Business excluded)']
+  block_geoid              text    [not null, note: '15-digit census block GEOID; LEFT(block_geoid,12) = block group GEOID']
+  state_fips               text    [not null, note: '2-digit state FIPS']
+  as_of_date               date    [not null, note: 'FCC filing period date (e.g. 2025-06-30)']
+
+  indexes {
+    (location_id, provider_id, technology_code) [unique, name: 'fcc_broadband_coverage_unique_idx']
+    block_geoid [name: 'fcc_broadband_coverage_block_geoid_idx']
+    location_id [name: 'fcc_broadband_coverage_location_id_idx']
+    state_fips  [name: 'fcc_broadband_coverage_state_fips_idx']
+  }
+
+  Note: 'FCC BDC State/Location Coverage — Fixed Broadband (residential/mixed). Source: bdc.fcc.gov Public Data API. Semi-annual refresh. Spatial lookup: ST_Contains on census_block_groups → LEFT(block_geoid,12) join. Satellite (GSO/NGSO) excluded.'
+}
+
 // ─── Cross-table references ───────────────────────────────────────────────────
 
 Ref: fema_nri.tract_id - census_tracts.geoid

@@ -30,12 +30,17 @@ def ingest_all(region: str) -> None:
     from plinth.ingest.nhd import NhdIngestor
     from plinth.ingest.ssurgo import SsurgoIngestor
 
+    from plinth.ingest.fcc_broadband import FccBroadbandIngestor
+    from plinth.ingest.noaa_normals import NoaaNormalsIngestor
+
     CensusTigerIngestor().run(region)
     FemaNfhlIngestor().run(region)
     IeccIngestor().run()
     FemaNriIngestor().run()
     NhdIngestor().run(region)
     SsurgoIngestor().run(region)
+    NoaaNormalsIngestor().run()
+    FccBroadbandIngestor().run(region)
 
     click.echo("All Phase 2 ingestors complete.")
 
@@ -129,6 +134,16 @@ def ingest_noaa_normals() -> None:
     from plinth.ingest.noaa_normals import NoaaNormalsIngestor
 
     NoaaNormalsIngestor().run()
+
+
+@ingest.command("fcc-broadband")
+@click.option("--region", default="ne-oklahoma", show_default=True,
+              help="Region slug (e.g. ne-oklahoma) or state FIPS mapping.")
+def ingest_fcc_broadband(region: str) -> None:
+    """Ingest FCC BDC State/Location Coverage CSVs (Fixed Broadband)."""
+    from plinth.ingest.fcc_broadband import FccBroadbandIngestor
+
+    FccBroadbandIngestor().run(region)
 
 
 def _require_ingestor(name: str) -> None:

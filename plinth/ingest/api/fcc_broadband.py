@@ -22,7 +22,7 @@ import httpx
 from plinth.config import get_settings
 from plinth.db.cache import get_cached, set_cached
 
-_BASE = "https://broadbandmap.fcc.gov/api/public/map"
+_BASE = "https://bdc.fcc.gov/api/public/map"
 _DATASET = "fcc-broadband"
 _TTL_DAYS = 90
 

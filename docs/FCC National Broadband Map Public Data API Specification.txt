@@ -1,0 +1,492 @@
+Broadband Data Collection
+National Broadband Map Public Data API
+Specifications and Instructions
+April 28, 2025
+Table of Contents
+1 Overview 4
+2 Generating an API Access Token 4
+3 Broadband Data Collection APIs 7
+3.1 View List of As Of Dates 8
+3.2 View List of Availability Data Downloads 10
+3.3 View List of Challenge Data Downloads 12
+3.4 Download File 14
+4 Funding Map APIs 15
+4.1 View List of Funding Data Downloads 16
+4.2 Download File 18
+2
+Change Log
+Revision
+Date Comments
+1.0 2023-11-03 Initial release
+1.1 2023-11-14 Corrected paths for View List of Availability Data, View List of Challenge Data,
+and Download File API endpoints.
+1.2 2024-04-22 Added APIs for Funding Map: View List of Funding Data Downloads,
+Download File
+1.3 2024-06-20 Broadband Summary by Geography Type downloads are now split into
+separate exports -
+“Census Place” and “Other Geographies”
+1.4 2024-10-10 Reorganized “View List of Availability Data Downloads” API
+1.5 2025-04-28 - Included sample curl commands to assist with API usage
+- Included details for accepting disclaimer text
+3
+1 Overview
+The National Broadband Map (NBM) includes a series of public-facing application programming
+interfaces (APIs) that allow users to extract information available from the map directly, without
+having to download multiple individual files from the NBM website. These files are available
+from the National Broadband Map - Data Download page
+(https://broadbandmap.fcc.gov/data-download), and users can download various files related
+to (1) broadband availability data by both state and provider, and (2) challenges to the
+broadband serviceable location fabric, fixed broadband availability data, and mobile broadband
+availability data. The specifications for the BDC Public Data Download files are available at
+https://us-fcc.app.box.com/v/bdc-data-downloads-output.
+The list of available APIs is outlined below. In addition, OpenAPI (Swagger) YAML files can be
+accessed at https://us-fcc.box.com/v/bdc-public-data-api-swagger.
+As a prerequisite, users must have an active FCC User Registration account, including a
+username and password. If you do not have an account, instructions on how to create one can
+be found at https://help.bdc.fcc.gov/hc/en-us/articles/20044640394395. In order to access
+the APIs, users also must generate an API token, within the BDC system, which is used to
+authenticate user access.
+2 Generating an API Access Token
+To create an API token, users must first log into the NBM application through the following link
+https://broadbandmap.fcc.gov/login using their FCC User Registration credentials.
+4
+Upon successful login, you will be navigated to a Consumer Challenges page. From there, click
+on your username in the top right corner of the page. You will see a navigation menu that
+includes a “Manage API Access” option. Select that option.
+Clicking on the “Manage API Access” link will navigate you to a standalone Manage API Access
+page. From this page, click the “Generate” button. The first time you generate a token, you will
+need to agree to FCC disclaimer text before being able to proceed to token generation.
+Clicking “I Agree” within the Terms of Use modal will open a Generate Token modal. This modal
+will display your token value. Copy your token value and save it to a safe location. The token
+value, along with your username, will be required to access the National Broadband Map APIs.
+5
+After clicking the “Close” button, you will be returned to the Manage API Access page. There,
+the Token Status and Last Modified date for your token will be displayed, as shown below. You
+can regenerate or revoke their tokens at any time.
+Please note that an API token may be revoked by an FCC Administrator at any time. If your
+token has been disabled, a banner will be displayed within the Manage API Access page
+instructing you to contact the FCC for further assistance.
+Note: If you have previously generated a token within the Broadband Data Collection System,
+6
+that token will be displayed to you when you first navigate to the Manage API Access page.
+3 Broadband Data Collection APIs
+The different APIs that can be used to extract the data available from the NBM are described
+below.
+7
+3.1 View List of As Of Dates
+Method: GET
+Path: /api/public/map/listAsOfDates
+Rate Limit: 10 calls per minute
+Description: Provides a listing of “as of dates” available for each data type
+Path parameters:
+●
+None
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+None
+Definition of output fields
+Field Name Description
+data
+_
+type Name identifying the data type (i.e. availability, challenge)
+as
+of
+_
+_
+date Data as-of date in ISO-8601 date format (i.e., YYYY-MM-DD).
+Sample Curl Command:
+curl --location 'https://bdc.fcc.gov/api/public/map/listAsOfDates'
+--header 'username: *****'
+--header 'hash_value: ****'
+Response:
+{
+{
+},
+{
+},
+{
+},
+{
+"data": [
+"data_type": "availability",
+"as_of_date": "2022-12-31"
+"data_type": "availability",
+"as_of_date": "2023-06-30"
+"data_type": "availability",
+"as_of_date": "2023-12-31"
+"data_type": "availability",
+8
+"as_of_date": "2024-06-30"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2022-11-30"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2022-12-31"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2023-01-31"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2023-02-28"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2023-03-31"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2023-04-30"
+},
+{
+"data_type": "challenge",
+"as_of_date": "2025-02-28"
+}
+],
+"result_count": 11,
+"status_code": 200,
+"message": null,
+"status": "successful",
+"request_date": "2025-03-20T18:46:40.309Z"
+9
+3.2 View List of Availability Data Downloads
+Method: GET
+Path: /api/public/map/downloads/listAvailabilityData/{as_of_date}
+Rate Limit: 10 calls per minute
+Description: Provides a full listing of all coverage files that are available for download for a
+given “as of date”
+Path parameters:
+●
+as_of_date (date format ‘YYYY-MM-DD’) - required
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+●
+●
+●
+category (string) - optional
+○
+Valid Values: Summary, State, Provider
+subcategory (string) - optional
+○
+Valid Values (category = Summary): Summary by Geography Type - Census Place,
+Summary by Geography Type - Other Geographies, Provider Summary by
+Geography Type, Provider Summary
+○
+Valid Values (category = State): Provider List, Location Coverage, Hexagon
+Coverage
+○
+Valid Values (category = Provider): Location Coverage, Hexagon Coverage, Raw
+Coverage, Supporting Data
+technology_type (string) - optional
+○
+Valid Values: Fixed Broadband, Mobile Broadband, Mobile Voice
+speed_tier (string) - optional
+○
+Valid Values (category = Provider | Subcategory = Hexagon Coverage OR Raw
+Coverage): 35/3, 7/1
+Definition of output fields
+Field Name Description
+file
+_
+id Unique identifier for the data download
+category Primary category for the data download
+subcategory Subcategory for the data download
+technology_
+type Type of technology (Fixed Broadband, Mobile Broadband, Mobile Voice)
+technology_
+code Code for the technology with which the provider reports to provide service
+technology_
+code
+_
+desc Description for the technology with which the provider reports to provide service
+speed
+_
+tier The download/upload speed for 5G coverage in Mbps (35/3, 7/1)
+10
+Field Name Description
+state
+_
+fips
+2-digit FIPS code for the selected state / territory from the current U.S. Census
+Bureau data (leading zero included)
+state
+_
+name US state / territory associated with the data
+provider
+_
+id Unique identifier for the service provider
+provider
+_
+name Name of the holding company for the service provider
+file
+_
+type The file type of the data download (csv, gis)
+file
+name The file name of the data download
+_
+record
+count The number of records contained within the data download
+_
+Sample Curl Command:
+curl --location 'https://bdc.fcc.gov/api/public/map/downloads/listAvailabilityData/2024-06-30'
+--header 'username: *****'
+--header 'hash_value: *****'
+Response (Reduced Sample):
+{
+"data": [
+{
+"file_id": 970177,
+"category": "Provider",
+"subcategory": "Hexagon Coverage",
+"technology_type": "Mobile Broadband",
+"technology_code": "300",
+"technology_code_desc": "3G",
+"speed_tier": null,
+"state_fips": "16",
+"state_name": "Idaho",
+"provider_id": "360114",
+"provider_name": "Union Holding Corp.",
+"file_type": "gis",
+"file_name": "bdc_16_360114_3G_mobile_broadband_h3_J24_04mar2025",
+"record_count": "18401"
+}
+],
+"result_count": 11475,
+"status_code": 200,
+"message": null,
+"status": "successful",
+"request_date": "2025-03-20T18:50:55.203Z"
+}
+11
+3.3 View List of Challenge Data Downloads
+Method: GET
+Path: /api/public/map/downloads/listChallengeData/{as_of_date}
+Rate Limit: 10 calls per minute
+Description: Provides a full listing of all challenge files that are available for download for a
+given “as of date”
+Path parameters:
+●
+as_of_date (date format ‘YYYY-MM-DD’) - required
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+category (string) - optional
+○
+Valid Values: Fabric Challenge - In Progress, Fabric Challenge - Resolved, Fixed
+Challenge - Cumulative, Fixed Challenge - In Progress, Fixed Challenge - Resolved,
+Mobile Challenge - In Progress, Mobile Challenge - Resolved
+Definition of output fields
+Field Name Description
+file
+_
+id Unique identifier for the data download
+category Primary category for the data download
+state
+_
+fips
+2-digit FIPS code for the selected state / territory from the current U.S. Census
+Bureau data (leading zero included)
+state
+_
+name US state / territory associated with the data
+record
+count The number of records contained within the data download
+_
+12
+Sample Curl Command:
+curl --location 'https://bdc.fcc.gov/api/public/map/downloads/listChallengeData/2024-06-30'
+--header 'username: XXXXX
+--header 'hash_value: XXXXX'
+Response (Reduced Sample):
+{
+"data": [
+{
+"file_id": 5779,
+"category": "Fabric Challenge - In Progress",
+"state_fips": "01",
+"state_name": "Alabama",
+"record_count": "790"
+},
+{
+"file_id": 5780,
+"category": "Fabric Challenge - In Progress",
+"state_fips": "02",
+"state_name": "Alaska",
+"record_count": "11124"
+}
+],
+"result_count": 258,
+"status_code": 200,
+"message": null,
+"status": "successful",
+"request_date": "2025-03-20T18:55:31.938Z"
+}
+13
+3.4 Download File
+Method: GET
+Path: /api/public/map/downloads/downloadFile/{data_type}/{file_id}/{file_type}
+Rate Limit: 10 calls per minute
+Description: Allows users to download availability and challenge data based on the ID and
+type of the file
+Constraints: None
+Path parameters:
+●
+●
+●
+data_type (string) - required
+○
+Valid Values: availability, challenge
+file_id (string) - required
+○
+Valid Values: From APIs defined in 3.2 and 3.3 above
+file_type (string) - optional
+○
+Valid Values (where file_type = gis): 1 = ESRI Shapefile, 2 = GeoPackage
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+None
+Sample Curl Command:
+curl --location
+'https://bdc.fcc.gov/api/public/map/downloads/downloadFile/availability/976473/1'
+--header 'username: XXXXX'
+--header 'hash_value: XXXXXX'
+Response:
+Downloaded File see response headers for the details
+Content-Disposition:
+attachment;
+filename="bdc_41_mobile_broadband_summary_by_geography_place_J24_04mar2025.csv.zip
+"
+14
+4 Funding Map APIs
+The different APIs that can be used to extract the data available from the Funding Map are
+described below.
+15
+4.1 View List of Funding Data Downloads
+Method: GET
+Path: /api/public/fundingmap/downloads/listFundingData
+Rate Limit: 10 calls per minute
+Description: Provides a full listing of all funding map files that are available for download
+Path parameters:
+●
+None
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+None
+Definition of output fields
+Field Name Description
+file
+_
+id Unique identifier for the data download
+category Primary category for the data download
+data
+_
+type
+Unserved-Unfunded: List of locations that are both unserved and unfunded for
+various technologies and speeds
+Funding Data: Raw data submitted by Agency
+agency_
+name Name of Agency providing broadband funding
+program
+_
+name Name of funded Program
+project
+_
+name Name of funded Project
+state
+_
+fips
+2-digit FIPS code for the selected state / territory from the current U.S. Census
+Bureau data (leading zero included)
+state
+_
+name US state / territory associated with the data
+file
+name _
+The file name of the data download
+record
+count _
+The number of records contained within the data download
+16
+Sample Curl Command:
+curl --location 'https://bdc.fcc.gov/api/public/fundingmap/downloads/listFundingData'
+--header 'username: XXXXX'
+--header 'hash_value: XXXXX'
+Response (Reduced Sample)
+{
+"data": [
+{
+"file_id": 105572,
+"category": "Funding Data",
+"data_type": "Program",
+"agency_name": "Federal Communications Commission",
+"program_name": "Bringing Puerto Rico Together",
+"project_name": null,
+"state_fips": null,
+"state_name": null,
+"file_name": "fundingdata_program25_J24_05mar2025",
+"record_count": null
+}
+],
+"result_count": 2696,
+"status_code": 200,
+"message": null,
+"status": "successful",
+"request_date": "2025-03-20T19:08:07.278Z"
+}
+17
+4.2 Download File
+Method: GET
+Path: /api/public/fundingmap/downloads/downloadFile/{file_id}
+Rate Limit: 10 calls per minute
+Description: Allows users to download funding map data based on the ID of the file
+Constraints: None
+Path parameters:
+●
+file_id (string) - required
+○
+Valid Values: From APIs defined in 3.2 and 3.3 above
+Header parameters:
+●
+●
+username (string) - required
+hash_value (string) - required
+Query parameters:
+●
+None
+Sample Curl Command:
+curl --location 'https://bdc.fcc.gov/api/public/fundingmap/downloads/downloadFile/105572'
+--header 'username: XXXXX'
+--header 'hash_value: XXXXX'
+Response:
+Downloaded File see response headers for the details
+Content-Disposition:
+attachment; filename="fundingdata_program25_J24_22jan2025.zip"
+18
