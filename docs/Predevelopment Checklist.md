@@ -1,5 +1,7 @@
 # Plinth POC — Predevelopment Checklist
 
+> ⚠️ **This checklist is for Ubuntu 24.04 LTS servers.** If you're using a Mac Mini or macOS, see `Predevelopment Checklist - Mac.md` instead.
+
 > Everything that must be in place before writing a line of code.
 > Checked items are prerequisites. Unchecked items are tasks.
 > **Test address:** 11822 E 116th St N, Collinsville, OK 74021

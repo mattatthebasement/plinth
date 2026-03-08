@@ -23,7 +23,7 @@ cp .env.example .env
 ./scripts/bootstrap.sh
 ```
 
-Services run on a single self-hosted Ubuntu server. See `docs/Predevelopment Checklist.md` for hardware and environment setup.
+Services run on a single self-hosted server (Ubuntu 24.04 LTS or macOS). See `docs/Predevelopment Checklist.md` (Ubuntu) or `docs/Predevelopment Checklist - Mac.md` (macOS / Mac Mini) for hardware and environment setup.
 
 ---
 

@@ -21,7 +21,7 @@ Plinth is a paid, on-demand PDF site intelligence report service for real estate
 | PDF generation | WeasyPrint + Jinja2 |
 | Maps | Mapbox Static Images API |
 | Charts | matplotlib (saved as PNG, embedded in HTML→PDF) |
-| Infrastructure | Docker Compose on a single self-hosted Ubuntu 24.04 server |
+| Infrastructure | Docker Compose on a single self-hosted server (Ubuntu 24.04 LTS or macOS with OrbStack) |
 
 ---
 
