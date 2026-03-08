@@ -20,11 +20,12 @@ ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-# Copy dependency manifest first so Docker can cache the install layer
-# independently of source-code changes.
+# Copy everything needed to build the editable package.
+# plinth/ must exist before uv sync so hatchling can write a valid .pth file.
 COPY pyproject.toml ./
 COPY uv.lock* ./
 COPY README.md ./
+COPY plinth/ ./plinth/
 
 # Install all runtime dependencies (no dev extras).
 # uv creates a project-local .venv and installs the plinth package in editable
@@ -32,8 +33,6 @@ COPY README.md ./
 # without a rebuild.
 RUN uv sync --no-dev
 
-# Copy application source
-COPY plinth/ ./plinth/
 COPY scripts/ ./scripts/
 
 # Start the Prefect process worker so this container can execute flows.
