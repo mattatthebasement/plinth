@@ -25,8 +25,8 @@ def run_census_tiger(region: str) -> None:
 
 @task(name="annual-ssurgo", retries=1)
 def run_ssurgo(region: str) -> None:
-    from plinth.ingest.usda_ssurgo import UsdaSsurgoIngestor
-    UsdaSsurgoIngestor().run(region)
+    from plinth.ingest.ssurgo import SsurgoIngestor
+    SsurgoIngestor().run(region)
 
 
 @task(name="annual-nlcd", retries=1)

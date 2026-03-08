@@ -40,15 +40,15 @@ def ingest_fema_nri(region: str) -> str:
 
 @task(name="ingest-nhd-hr", retries=1)
 def ingest_nhd_hr(region: str) -> str:
-    from plinth.ingest.nhd_hr import NhdHrIngestor
-    NhdHrIngestor().run(region)
+    from plinth.ingest.nhd import NhdIngestor
+    NhdIngestor().run(region)
     return "nhd-hr"
 
 
 @task(name="ingest-usda-ssurgo", retries=1)
 def ingest_usda_ssurgo(region: str) -> str:
-    from plinth.ingest.usda_ssurgo import UsdaSsurgoIngestor
-    UsdaSsurgoIngestor().run(region)
+    from plinth.ingest.ssurgo import SsurgoIngestor
+    SsurgoIngestor().run(region)
     return "usda-ssurgo"
 
 
