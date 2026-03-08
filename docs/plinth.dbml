@@ -1,0 +1,84 @@
+// Plinth — Database Schema
+// Format: DBML (dbdiagram.io)
+// Source of truth: plinth/db/migrations/
+
+Project plinth {
+  database_type: 'PostgreSQL'
+  Note: 'On-demand site intelligence reports. PostGIS enabled.'
+}
+
+// ─── Migration Tracking ──────────────────────────────────────────────────────
+
+Table schema_migrations {
+  version    text        [pk]
+  applied_at timestamptz [default: `now()`]
+
+  Note: 'Managed by plinth/db/__init__.py. One row per applied .sql file.'
+}
+
+// ─── Phase 1: Foundation ─────────────────────────────────────────────────────
+
+Table data_source_registry {
+  source_name      text        [pk, note: 'e.g. fema-nfhl, usgs-3dep, census-tiger']
+  dataset_version  text        [note: 'e.g. 2024-01, 2023']
+  last_downloaded  timestamptz
+  update_frequency text        [note: 'monthly | annual | decadal']
+  next_review_date date
+  coverage_region  text        [note: 'ne-oklahoma | oklahoma | national']
+  notes            text
+
+  Note: 'One row per data source. Upserted by each ingestor register() call.'
+}
+
+Table raster_tiles {
+  id              serial      [pk]
+  dataset         text        [not null, note: 'e.g. usgs-3dep, nlcd, usgs-seismic']
+  s3_key          text        [not null, unique, note: 'MinIO key: {dataset}/{version}/{tile_id}.tif']
+  bounds          geometry    [not null, note: 'Polygon, SRID 4326 — spatial index via GIST']
+  resolution_m    numeric     [note: '~10 for USGS 3DEP, ~30 for NLCD']
+  tile_id         text        [note: 'e.g. n37w096']
+  dataset_version text
+  created_at      timestamptz [default: `now()`]
+
+  indexes {
+    bounds [type: gist, name: 'raster_tiles_bounds_idx']
+    dataset [name: 'raster_tiles_dataset_idx']
+  }
+
+  Note: 'Spatial index of COG tiles stored in MinIO. PostGIS holds bounds only — raster data lives in MinIO.'
+}
+
+Table query_cache {
+  cache_key   text        [pk, note: 'Dataset-specific compound key e.g. nasa-power:{grid}:{params}:{dates}']
+  dataset     text        [not null, note: 'e.g. nasa-power, epa-aqs, census-acs, usgs-eq, fcc-broadband']
+  input_lat   numeric
+  input_lon   numeric
+  result_json jsonb
+  cached_at   timestamptz [default: `now()`]
+  expires_at  timestamptz [note: 'NULL = no expiry. Partial index on non-null values.']
+
+  indexes {
+    expires_at [name: 'query_cache_expires_idx', note: 'WHERE expires_at IS NOT NULL']
+  }
+
+  Note: '''
+    Cached results for API-based sources. TTLs by dataset:
+    - nasa-power: 30 days
+    - epa-aqs: 365 days
+    - census-acs: 365 days
+    - usgs-eq: 30 days
+    - fcc-broadband: 90 days
+  '''
+}
+
+Table report_archive {
+  report_id            text        [pk]
+  generated_at         timestamptz [default: `now()`]
+  input_address        text
+  lat                  numeric
+  lon                  numeric
+  source_versions_json jsonb       [note: 'Snapshot of data_source_registry at report generation time']
+  pdf_storage_key      text        [note: 'MinIO key for the stored PDF']
+
+  Note: 'Every generated report. source_versions_json captures data lineage for audit purposes.'
+}
