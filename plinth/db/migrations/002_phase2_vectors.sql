@@ -142,7 +142,7 @@ CREATE INDEX IF NOT EXISTS ssurgo_mapunits_geom_idx ON ssurgo_mapunits USING GIS
 CREATE TABLE IF NOT EXISTS ssurgo_muaggatt (
     mukey        TEXT PRIMARY KEY,
     hydgrpdcd    TEXT,
-    drclassddc   TEXT,
+    drclassdcd   TEXT,
     slopegraddcp NUMERIC,
     taxclname    TEXT
 );

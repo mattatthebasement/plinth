@@ -13,8 +13,9 @@ from plinth.ingest.base import BaseIngestor
 TNM_API = "https://tnmaccess.nationalmap.gov/api/v1/products"
 NHD_DATASET = "National Hydrography Dataset Plus High Resolution (NHDPlus HR)"
 
-# HU4 units that cover NE Oklahoma
-HU4_UNITS = ["1101", "1102", "1103"]
+# HU4 units that cover NE Oklahoma (Rogers County at 36.05N, 95.81W)
+# Verified via TNM bbox query at bbox=(-96.0,35.9,-95.5,36.3)
+HU4_UNITS = ["1107", "1109", "1110", "1111"]
 
 # NE-Oklahoma bounding box (matches REGIONS in cli/ingest.py)
 _NE_OK_BBOX = (-96.5, 35.5, -94.5, 37.0)
@@ -30,17 +31,16 @@ class NhdIngestor(BaseIngestor):
     update_frequency = "annual"
 
     def download(self, region: Optional[str] = None) -> None:
-        """Query TNM API for GDB download URLs and fetch each HU4 package."""
+        """Query TNM API once for all HU4 units, then fetch each GDB package."""
         import httpx
 
+        self._log("Querying TNM API for NE Oklahoma NHD-HR units…")
+        url_map = self._get_all_tnm_urls()
+
         for hu4 in HU4_UNITS:
-            self._log(f"Querying TNM API for HU4 {hu4}…")
-            url = self._get_tnm_url(hu4)
+            url = url_map.get(hu4)
             if url is None:
-                self._log(
-                    f"  Could not find download URL for HU4 {hu4}. "
-                    f"Check {TNM_API}?datasets={NHD_DATASET}&polyCode={hu4}&polyType=huc4&outputFormat=JSON"
-                )
+                self._log(f"  Warning: no download URL found for HU4 {hu4}, skipping.")
                 continue
 
             dest = self.staging_dir / f"nhd_{hu4}.zip"
@@ -52,33 +52,35 @@ class NhdIngestor(BaseIngestor):
                 with zipfile.ZipFile(dest) as zf:
                     zf.extractall(unzip_dir)
 
-    def _get_tnm_url(self, hu4: str) -> Optional[str]:
-        """Query the USGS TNM API and return the GDB zip download URL."""
+    def _get_all_tnm_urls(self) -> dict[str, str]:
+        """Make a single TNM API call for the bbox and return {hu4: download_url}."""
         import httpx
 
+        bbox = _NE_OK_BBOX
         params = {
             "datasets": NHD_DATASET,
-            "polyCode": hu4,
-            "polyType": "huc4",
+            "bbox": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
             "outputFormat": "JSON",
+            "max": 100,
         }
         try:
-            resp = httpx.get(TNM_API, params=params, timeout=30, follow_redirects=True)
+            resp = httpx.get(TNM_API, params=params, timeout=60, follow_redirects=True)
             resp.raise_for_status()
-            data = resp.json()
-            items = data.get("items", [])
-            for item in items:
-                url = item.get("downloadURL", "")
-                if url.endswith(".zip") and "GDB" in url.upper():
-                    return url
-            # Fall back to first zip
-            for item in items:
-                url = item.get("downloadURL", "")
-                if url.endswith(".zip"):
-                    return url
+            items = resp.json().get("items", [])
         except Exception as exc:
-            self._log(f"  TNM API error for HU4 {hu4}: {exc}")
-        return None
+            self._log(f"  TNM API error: {exc}")
+            return {}
+
+        url_map: dict[str, str] = {}
+        for item in items:
+            title = item.get("title", "")
+            url = item.get("downloadURL", "")
+            if not url.endswith(".zip") or "GDB" not in url.upper():
+                continue
+            for hu4 in HU4_UNITS:
+                if hu4 not in url_map and (f"- {hu4} " in title or f"- {hu4}(" in title):
+                    url_map[hu4] = url
+        return url_map
 
     def validate(self) -> None:
         """Check that downloaded zips and GDB directories are present."""
@@ -124,7 +126,10 @@ class NhdIngestor(BaseIngestor):
 
     def _load_flowlines(self, gdb_path: str, bbox: tuple) -> None:
         staging = "_staging_nhd_flow"
-        spat_args = ["-spat", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3])]
+        spat_args = [
+            "-dim", "2",  # strip Z coordinates — NHD GDBs use 3D geometries
+            "-spat", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3]),
+        ]
         try:
             self._ogr2ogr_to_staging_table(
                 gdb_path, "NHDFlowline", staging, extra_args=spat_args
@@ -163,7 +168,10 @@ class NhdIngestor(BaseIngestor):
 
     def _load_waterbodies(self, gdb_path: str, bbox: tuple) -> None:
         staging = "_staging_nhd_wb"
-        spat_args = ["-spat", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3])]
+        spat_args = [
+            "-dim", "2",  # strip Z coordinates — NHD GDBs use 3D geometries
+            "-spat", str(bbox[0]), str(bbox[1]), str(bbox[2]), str(bbox[3]),
+        ]
         try:
             self._ogr2ogr_to_staging_table(
                 gdb_path, "NHDWaterbody", staging, extra_args=spat_args

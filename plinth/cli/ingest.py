@@ -67,11 +67,12 @@ def ingest_iecc() -> None:
 
 
 @ingest.command("fema-nri")
-def ingest_fema_nri() -> None:
-    """Ingest FEMA National Risk Index (tract-level CSV)."""
+@click.option("--region", default="ne-oklahoma", show_default=True)
+def ingest_fema_nri(region: str) -> None:
+    """Ingest FEMA National Risk Index (tract-level, ArcGIS FeatureServer)."""
     from plinth.ingest.fema_nri import FemaNriIngestor
 
-    FemaNriIngestor().run()
+    FemaNriIngestor().run(region)
 
 
 @ingest.command("nhd")

@@ -252,7 +252,7 @@ Table ssurgo_mapunits {
 Table ssurgo_muaggatt {
   mukey        text    [pk]
   hydgrpdcd    text    [note: 'Hydrologic soil group (A/B/C/D)']
-  drclassddc   text    [note: 'Drainage class']
+  drclassdcd   text    [note: 'Drainage class']
   slopegraddcp numeric [note: 'Representative slope gradient (%)']
   taxclname    text    [note: 'Taxonomic classification name']
 

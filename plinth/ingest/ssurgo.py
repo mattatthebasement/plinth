@@ -1,17 +1,19 @@
 """USDA SSURGO soils ingestor.
 
-Downloads per-county Web Soil Survey packages for NE Oklahoma and loads map-unit
-geometries plus tabular attributes into PostGIS.
+Uses the NRCS Soil Data Mart WFS to load map-unit geometries plus extended
+attributes into PostGIS, and the SDM Tabular API for component-level data.
 """
 
-import csv
-import zipfile
+import json
 from pathlib import Path
 from typing import Optional
 
 from plinth.ingest.base import BaseIngestor
 
-# Survey area symbol → county FIPS for NE Oklahoma
+WFS_URL = "WFS:https://SDMDataAccess.sc.egov.usda.gov/Spatial/SDMWGS84Geographic.wfs"
+WFS_LAYER = "mapunitpolyextended"
+SDM_TABULAR = "https://SDMDataAccess.nrcs.usda.gov/Tabular/post.rest"
+
 NE_OK_SURVEY_AREAS: dict[str, str] = {
     "OK021": "40021",  # Cherokee
     "OK035": "40035",  # Craig
@@ -23,20 +25,15 @@ NE_OK_SURVEY_AREAS: dict[str, str] = {
     "OK145": "40145",  # Wagoner
 }
 
-WSS_DOWNLOAD = (
-    "https://websoilsurvey.sc.egov.usda.gov/DSD/Download/Cache/SSA/"
-    "wss_SSA_{areasymbol}_soildb_US_{date}.zip"
-)
-SDM_TABULAR = "https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest"
+_BATCH_SIZE = 500
 
 
 class SsurgoIngestor(BaseIngestor):
-    """Download USDA SSURGO survey-area packages and load into PostGIS.
+    """Load USDA SSURGO soils data via WFS and SDM Tabular API.
 
     Loads:
-    - ``MUPOLYGON`` layer → ``ssurgo_mapunits``
-    - ``muaggatt.txt`` (pipe-delimited) → ``ssurgo_muaggatt``
-    - ``component.txt`` (pipe-delimited) → ``ssurgo_component``
+    - WFS ``mapunitpolyextended`` layer → ``ssurgo_mapunits`` + ``ssurgo_muaggatt``
+    - SDM Tabular component query → ``ssurgo_component``
 
     Note: Only raw USDA taxonomy is stored — no derived suitability or
     foundation ratings are computed.
@@ -46,252 +43,266 @@ class SsurgoIngestor(BaseIngestor):
     update_frequency = "annual"
 
     def download(self, region: Optional[str] = None) -> None:
-        """Download SSURGO zip for each survey area."""
-        for areasymbol in NE_OK_SURVEY_AREAS:
-            self._log(f"Downloading SSURGO for {areasymbol}…")
-            date_suffix = self._get_saverest_date(areasymbol)
-            url = WSS_DOWNLOAD.format(areasymbol=areasymbol, date=date_suffix)
-            dest = self.staging_dir / f"{areasymbol}.zip"
+        """Fetch SSURGO map units and components from NRCS web services."""
+        meta_path = self.staging_dir / "meta.json"
+        if self._is_fresh(meta_path, ttl_days=30):
+            self._log("SSURGO data is up-to-date (< 30 days old).")
+            return
 
-            try:
-                fresh = self._download_if_changed(url, dest)
-            except Exception as exc:
-                self._log(
-                    f"  Download failed for {areasymbol}: {exc}. "
-                    f"Check URL: {url}"
-                )
-                continue
+        areas = list(NE_OK_SURVEY_AREAS.keys())
+        self._log(f"Fetching SSURGO for {len(areas)} survey areas…")
+        self._fetch_mapunits_via_wfs(areas)
+        self._fetch_components_via_sdm(areas)
 
-            unzip_dir = self.staging_dir / areasymbol
-            if fresh or not unzip_dir.exists():
-                self._log(f"  Unzipping {areasymbol}.zip…")
-                unzip_dir.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(dest) as zf:
-                    zf.extractall(unzip_dir)
+        meta_path.write_text(json.dumps({"fetched_date": __import__("datetime").date.today().isoformat()}))
 
-    def _get_saverest_date(self, areasymbol: str) -> str:
-        """Query SDM to get the SAVEREST (last updated) date for a survey area.
+    def _fetch_mapunits_via_wfs(self, areas: list[str]) -> None:
+        """Load mapunitpolyextended into a staging table via WFS, one county at a time.
 
-        Returns a date string in YYYYMMDD format.  Falls back to today's date
-        if the query fails.
+        ogr2ogr's -spat flag sends an OGC XML BBOX filter that this WFS server
+        rejects (400). Instead, we download GML directly via httpx using the
+        BBOX as a URL query parameter (which the server accepts), write to a
+        temp file, then load from file.
+
+        The SDM WFS has a ~10.1 billion sq-m bbox area limit, so we query per
+        county using bboxes from census_block_groups.
         """
-        import datetime
+        import subprocess
+        import tempfile
+
         import httpx
 
-        payload = {
-            "query": (
-                f"SELECT saverest FROM sacatalog WHERE areasymbol = '{areasymbol}'"
-            ),
-            "format": "JSON+COLUMNNAME+METADATA",
-        }
+        from plinth.db.connection import get_connection
+
+        s = self.settings
+        pg_dsn = (
+            f"PG:host={s.postgres_host} port={s.postgres_port} "
+            f"dbname={s.postgres_db} user={s.postgres_user} "
+            f"password={s.postgres_password}"
+        )
+
+        countyfps = [NE_OK_SURVEY_AREAS[a][-3:] for a in areas if a in NE_OK_SURVEY_AREAS]
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT countyfp,
+                        ST_XMin(ST_Extent(geom))::numeric(8,4),
+                        ST_YMin(ST_Extent(geom))::numeric(8,4),
+                        ST_XMax(ST_Extent(geom))::numeric(8,4),
+                        ST_YMax(ST_Extent(geom))::numeric(8,4)
+                    FROM census_block_groups
+                    WHERE statefp='40' AND countyfp = ANY(%s)
+                    GROUP BY countyfp
+                """, (countyfps,))
+                county_bboxes = {row[0]: row[1:] for row in cur.fetchall()}
+
+        first = True
+        for sym, fips in NE_OK_SURVEY_AREAS.items():
+            if sym not in areas:
+                continue
+            countyfp = fips[-3:]
+            if countyfp not in county_bboxes:
+                self._log(f"  Warning: no bbox found for {sym} ({fips}), skipping.")
+                continue
+            minx, miny, maxx, maxy = county_bboxes[countyfp]
+            buf = 0.02
+            bbox = f"{float(minx)-buf},{float(miny)-buf},{float(maxx)+buf},{float(maxy)+buf}"
+            self._log(f"  Fetching WFS GML for {sym} (BBOX {bbox})…")
+
+            url = (
+                "https://SDMDataAccess.sc.egov.usda.gov/Spatial/SDMWGS84Geographic.wfs"
+                f"?SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature"
+                f"&TYPENAME={WFS_LAYER}&BBOX={bbox}"
+            )
+            try:
+                resp = httpx.get(url, timeout=120, follow_redirects=True)
+                resp.raise_for_status()
+            except Exception as exc:
+                self._log(f"  Warning: WFS fetch failed for {sym}: {exc}")
+                continue
+
+            if b"ServiceException" in resp.content[:200]:
+                self._log(f"  Warning: WFS returned error for {sym}: {resp.text[:200]}")
+                continue
+
+            with tempfile.NamedTemporaryFile(suffix=".gml", delete=False) as tmp:
+                tmp.write(resp.content)
+                tmp_path = tmp.name
+
+            mode_flags = ["-overwrite"] if first else ["-append", "-update"]
+            cmd = [
+                "ogr2ogr",
+                "-f", "PostgreSQL",
+                pg_dsn,
+                *mode_flags,
+                "-nln", "_staging_ssurgo_wfs",
+                "-t_srs", "EPSG:4326",
+                "-nlt", "PROMOTE_TO_MULTI",
+                "-lco", "GEOMETRY_NAME=geom",
+                "-lco", "FID=gid",
+                tmp_path,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            __import__("os").unlink(tmp_path)
+            if result.returncode != 0:
+                self._log(f"  Warning: ogr2ogr load failed for {sym}: {result.stderr[:300]}")
+                continue
+            first = False
+            self._log(f"  Loaded {sym}.")
+
+        if first:
+            raise RuntimeError("WFS load failed for all survey areas.")
+
+    def _fetch_components_via_sdm(self, areas: list[str]) -> None:
+        """Query SDM Tabular for component data and cache as JSON."""
+        import httpx
+
+        area_list = ",".join(f"'{a}'" for a in areas)
+        query = f"""
+            SELECT c.cokey, c.mukey, c.compname, c.comppct_r, c.majcompflag
+            FROM component c
+            JOIN mapunit mu ON c.mukey = mu.mukey
+            JOIN legend l ON mu.lkey = l.lkey
+            WHERE l.areasymbol IN ({area_list})
+        """
+        self._log("  Querying SDM for component data…")
         try:
-            resp = httpx.post(SDM_TABULAR, data=payload, timeout=30, follow_redirects=True)
+            resp = httpx.post(
+                SDM_TABULAR,
+                data={"query": query, "format": "JSON+COLUMNNAME+METADATA"},
+                timeout=120,
+                follow_redirects=True,
+            )
             resp.raise_for_status()
             data = resp.json()
             rows = data.get("Table", [])
-            if len(rows) >= 2:  # row 0 is headers
-                date_str = str(rows[1][0]).strip()
-                # Format may be "MM/DD/YYYY HH:MM:SS" or "YYYY-MM-DD"
-                for fmt in ("%m/%d/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-                    try:
-                        dt = datetime.datetime.strptime(date_str[:len(fmt)], fmt)
-                        return dt.strftime("%Y%m%d")
-                    except ValueError:
-                        continue
+            # rows[0] = headers, rows[1] = metadata, rows[2:] = data
+            data_rows = rows[2:] if len(rows) > 2 else []
+            cache_path = self.staging_dir / "components.json"
+            cache_path.write_text(json.dumps(data_rows))
+            self._log(f"  Component rows fetched: {len(data_rows)}")
         except Exception as exc:
-            self._log(f"  Could not fetch SAVEREST for {areasymbol}: {exc}")
-
-        return datetime.date.today().strftime("%Y%m%d")
+            self._log(f"  Warning: component fetch failed: {exc}")
+            cache_path = self.staging_dir / "components.json"
+            cache_path.write_text(json.dumps([]))
 
     def validate(self) -> None:
-        """Verify zip files and GDB directories are present for each survey area."""
-        for areasymbol in NE_OK_SURVEY_AREAS:
-            dest = self.staging_dir / f"{areasymbol}.zip"
-            if not dest.exists():
-                self._log(f"  Warning: zip not found for {areasymbol}.")
-                continue
-            if dest.stat().st_size == 0:
-                raise ValueError(f"Empty zip for {areasymbol}: {dest}")
-            gdb = self._find_gdb(self.staging_dir / areasymbol)
-            if gdb is None:
-                raise ValueError(
-                    f"No GDB directory found for {areasymbol}. "
-                    "Check that the zip was extracted correctly."
+        """Verify staging table and component cache are present."""
+        from plinth.db.connection import get_connection
+
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                    "WHERE table_name = '_staging_ssurgo_wfs'"
                 )
+                exists = cur.fetchone()[0]
+
+        if not exists:
+            raise ValueError(
+                "Staging table _staging_ssurgo_wfs not found. Run download() first."
+            )
+
+        comp_path = self.staging_dir / "components.json"
+        if not comp_path.exists():
+            raise ValueError("Component cache not found. Run download() first.")
+
+        self._log("Validation passed.")
 
     def load(self) -> None:
-        """Load map units, aggregated attributes, and components for each survey area."""
-        for areasymbol in NE_OK_SURVEY_AREAS:
-            dest = self.staging_dir / f"{areasymbol}.zip"
-            if not dest.exists():
-                self._log(f"Skipping {areasymbol} — zip not downloaded.")
-                continue
+        """Upsert map units, muaggatt attributes, and components into PostGIS."""
+        self._load_mapunits_and_muaggatt()
+        self._load_components()
 
-            gdb_path = self._find_gdb(self.staging_dir / areasymbol)
-            if gdb_path is None:
-                self._log(f"Warning: no GDB found for {areasymbol}.")
-                continue
-
-            self._log(f"Loading map units for {areasymbol}…")
-            self._load_mapunits(str(gdb_path))
-
-            tabular_dir = self._find_tabular_dir(self.staging_dir / areasymbol)
-            if tabular_dir is None:
-                self._log(f"  Warning: no tabular directory found for {areasymbol}.")
-            else:
-                self._log(f"Loading muaggatt for {areasymbol}…")
-                self._load_muaggatt(tabular_dir)
-                self._log(f"Loading component for {areasymbol}…")
-                self._load_component(tabular_dir)
-
-    def _find_gdb(self, directory: Path) -> Optional[Path]:
-        for item in directory.rglob("*.gdb"):
-            if item.is_dir():
-                return item
-        return None
-
-    def _find_tabular_dir(self, base: Path) -> Optional[Path]:
-        for item in base.rglob("tabular"):
-            if item.is_dir():
-                return item
-        return None
-
-    def _load_mapunits(self, gdb_path: str) -> None:
-        staging = "_staging_ssurgo_mu"
-        try:
-            self._ogr2ogr_to_staging_table(gdb_path, "MUPOLYGON", staging)
-        except RuntimeError as exc:
-            self._log(f"  ogr2ogr error (MUPOLYGON): {exc}")
-            return
-
+    def _load_mapunits_and_muaggatt(self) -> None:
         from plinth.db.connection import get_connection
 
+        self._log("Loading ssurgo_mapunits from WFS staging table…")
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Column names from SSURGO GDB after ogr2ogr lowercasing
-                cur.execute(
-                    f"""
+                area_list = ",".join(f"'{a}'" for a in NE_OK_SURVEY_AREAS)
+                # Deduplicate: bboxes overlap, so the same mukey may appear more
+                # than once in the staging table. Use DISTINCT ON to keep one row.
+                cur.execute(f"""
                     INSERT INTO ssurgo_mapunits (mukey, musym, muname, geom)
-                    SELECT
-                        mukey,
-                        musym,
-                        muname,
-                        geom
-                    FROM {staging}
+                    SELECT DISTINCT ON (mukey) mukey, musym, muname, geom
+                    FROM _staging_ssurgo_wfs
+                    WHERE areasymbol IN ({area_list})
+                    ORDER BY mukey
                     ON CONFLICT (mukey) DO UPDATE SET
-                        geom   = EXCLUDED.geom,
                         musym  = EXCLUDED.musym,
-                        muname = EXCLUDED.muname
-                    """
-                )
-                rows = cur.rowcount
-                cur.execute(f"DROP TABLE IF EXISTS {staging}")
-            conn.commit()
-        self._log(f"  Map unit rows upserted: {rows}")
+                        muname = EXCLUDED.muname,
+                        geom   = EXCLUDED.geom
+                """)
+                mu_rows = cur.rowcount
+                self._log(f"  ssurgo_mapunits upserted: {mu_rows}")
 
-    def _load_muaggatt(self, tabular_dir: Path) -> None:
-        """Load muaggatt.txt (pipe-delimited) into ssurgo_muaggatt."""
-        muaggatt_path = tabular_dir / "muaggatt.txt"
-        if not muaggatt_path.exists():
-            self._log("  muaggatt.txt not found — skipping.")
+                cur.execute(f"""
+                    INSERT INTO ssurgo_muaggatt (mukey, hydgrpdcd, drclassdcd, slopegraddcp, taxclname)
+                    SELECT DISTINCT ON (mukey) mukey, hydgrpdcd, drclassdcd, slopegraddcp::numeric, NULL
+                    FROM _staging_ssurgo_wfs
+                    WHERE areasymbol IN ({area_list})
+                    ORDER BY mukey
+                    ON CONFLICT (mukey) DO UPDATE SET
+                        hydgrpdcd    = EXCLUDED.hydgrpdcd,
+                        drclassdcd   = EXCLUDED.drclassdcd,
+                        slopegraddcp = EXCLUDED.slopegraddcp
+                """)
+                mua_rows = cur.rowcount
+                self._log(f"  ssurgo_muaggatt upserted: {mua_rows}")
+
+                cur.execute("DROP TABLE IF EXISTS _staging_ssurgo_wfs")
+            conn.commit()
+
+    def _load_components(self) -> None:
+        comp_path = self.staging_dir / "components.json"
+        rows = json.loads(comp_path.read_text())
+        if not rows:
+            self._log("  No component data to load.")
             return
 
         from plinth.db.connection import get_connection
 
-        rows_data: list[tuple] = []
-        with muaggatt_path.open(newline="", encoding="utf-8") as fh:
-            reader = csv.reader(fh, delimiter="|")
-            for row in reader:
-                if len(row) < 5:
-                    continue
-                # SSURGO muaggatt column order (first 5 relevant fields):
-                # mukey | musym | muname | mukind | mapunitlfw_l | ... | hydgrpdcd | ...
-                # We need: mukey, hydgrpdcd, drclassddc, slopegraddcp, taxclname
-                # Use positional indexing from SSURGO column metadata
-                mukey = row[0].strip()
-                if not mukey:
-                    continue
-                # hydgrpdcd is typically column index ~7, but varies.
-                # Use a best-effort parse based on known column count (56 cols).
-                hydgrpdcd = row[6].strip() if len(row) > 6 else None
-                drclassddc = row[7].strip() if len(row) > 7 else None
-                slopegraddcp_raw = row[8].strip() if len(row) > 8 else None
-                taxclname = row[len(row) - 1].strip() if row else None
-                slopegraddcp: Optional[float] = None
-                if slopegraddcp_raw:
-                    try:
-                        slopegraddcp = float(slopegraddcp_raw)
-                    except ValueError:
-                        pass
-                rows_data.append((mukey, hydgrpdcd or None, drclassddc or None, slopegraddcp, taxclname or None))
-
-        if not rows_data:
-            return
-
-        upsert_sql = """
-            INSERT INTO ssurgo_muaggatt (mukey, hydgrpdcd, drclassddc, slopegraddcp, taxclname)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (mukey) DO UPDATE SET
-                hydgrpdcd    = EXCLUDED.hydgrpdcd,
-                drclassddc   = EXCLUDED.drclassddc,
-                slopegraddcp = EXCLUDED.slopegraddcp,
-                taxclname    = EXCLUDED.taxclname
-        """
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.executemany(upsert_sql, rows_data)
-            conn.commit()
-        self._log(f"  muaggatt rows upserted: {len(rows_data)}")
-
-    def _load_component(self, tabular_dir: Path) -> None:
-        """Load component.txt (pipe-delimited) into ssurgo_component."""
-        comp_path = tabular_dir / "comp.txt"
-        if not comp_path.exists():
-            comp_path = tabular_dir / "component.txt"
-        if not comp_path.exists():
-            self._log("  component.txt / comp.txt not found — skipping.")
-            return
-
-        from plinth.db.connection import get_connection
-
-        rows_data: list[tuple] = []
-        with comp_path.open(newline="", encoding="utf-8") as fh:
-            reader = csv.reader(fh, delimiter="|")
-            for row in reader:
-                if len(row) < 5:
-                    continue
-                cokey = row[0].strip()
-                mukey = row[1].strip()
-                if not cokey or not mukey:
-                    continue
-                compname = row[2].strip() or None
-                comppct_raw = row[3].strip()
-                majcompflag = row[4].strip() or None
-                comppct: Optional[float] = None
-                if comppct_raw:
-                    try:
-                        comppct = float(comppct_raw)
-                    except ValueError:
-                        pass
-                rows_data.append((cokey, mukey, compname, comppct, majcompflag))
-
-        if not rows_data:
-            return
-
+        self._log(f"Loading {len(rows)} component rows…")
         upsert_sql = """
             INSERT INTO ssurgo_component (cokey, mukey, compname, comppct_r, majcompflag)
-            VALUES (%s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s::numeric, %s)
             ON CONFLICT (cokey) DO UPDATE SET
                 mukey       = EXCLUDED.mukey,
                 compname    = EXCLUDED.compname,
                 comppct_r   = EXCLUDED.comppct_r,
                 majcompflag = EXCLUDED.majcompflag
         """
+        batch: list[tuple] = []
+        total = 0
         with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.executemany(upsert_sql, rows_data)
-            conn.commit()
-        self._log(f"  Component rows upserted: {len(rows_data)}")
+            for row in rows:
+                cokey, mukey, compname, comppct_r, majcompflag = row
+                batch.append((
+                    cokey or None, mukey or None,
+                    compname or None,
+                    comppct_r if comppct_r not in (None, "", "None") else None,
+                    majcompflag or None,
+                ))
+                if len(batch) >= _BATCH_SIZE:
+                    with conn.cursor() as cur:
+                        cur.executemany(upsert_sql, batch)
+                    conn.commit()
+                    total += len(batch)
+                    batch = []
+            if batch:
+                with conn.cursor() as cur:
+                    cur.executemany(upsert_sql, batch)
+                conn.commit()
+                total += len(batch)
+        self._log(f"  ssurgo_component upserted: {total}")
+
+    def _is_fresh(self, path: Path, ttl_days: int = 30) -> bool:
+        if not path.exists():
+            return False
+        import datetime
+        age = datetime.datetime.now() - datetime.datetime.fromtimestamp(path.stat().st_mtime)
+        return age.days < ttl_days
 
     def register(self) -> None:
         """Register this source in data_source_registry."""
@@ -302,7 +313,7 @@ class SsurgoIngestor(BaseIngestor):
             version=datetime.date.today().isoformat(),
             coverage_region="ne-oklahoma",
             notes=(
-                f"USDA SSURGO soils. Survey areas: {areas}. "
+                f"USDA SSURGO soils via NRCS WFS. Survey areas: {areas}. "
                 "Raw USDA taxonomy only — no derived suitability or foundation ratings."
             ),
         )

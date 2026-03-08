@@ -21,6 +21,7 @@ class BaseIngestor(ABC):
         self.settings = get_settings()
         self.staging_dir = Path(self.settings.staging_dir) / self.source_name
         self.staging_dir.mkdir(parents=True, exist_ok=True)
+        self._region: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Pipeline entry point
@@ -28,6 +29,7 @@ class BaseIngestor(ABC):
 
     def run(self, region: Optional[str] = None) -> None:
         """Execute the full ingest pipeline for the given region."""
+        self._region = region
         self._log("Downloading...")
         self.download(region)
 
