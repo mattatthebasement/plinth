@@ -7,6 +7,7 @@ from plinth.cli.cache import cache
 from plinth.cli.query import query
 from plinth.cli.report import report
 from plinth.cli.infra import infra
+from plinth.cli.flows import flows
 
 
 @click.group()
@@ -21,3 +22,4 @@ cli.add_command(cache)
 cli.add_command(query)
 cli.add_command(report)
 cli.add_command(infra)
+cli.add_command(flows)
