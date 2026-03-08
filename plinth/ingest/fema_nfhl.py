@@ -84,29 +84,12 @@ class FemaNfhlIngestor(BaseIngestor):
             }))
             self._log(f"    {len(features)} features saved.")
 
-    def _fetch_county_count(self, fips: str, client) -> int:
-        """Return total feature count for a county (cheap call, no geometry)."""
-        params = {
-            "where": f"DFIRM_ID LIKE '{fips}%'",
-            "returnCountOnly": "true",
-            "f": "json",
-        }
-        resp = client.get(_NFHL_QUERY, params=params)
-        resp.raise_for_status()
-        return resp.json().get("count", 0)
-
     def _fetch_county_features(self, fips: str, client) -> list:
         """Page through the NFHL REST API for one county, returning all features.
 
-        Page size is chosen based on total feature count to avoid FEMA's server
-        500-ing on large geometry payloads:
-          - >2000 features (e.g. Tulsa): 200/page — ~38 requests for 7,500 features
-          - <=2000 features (e.g. Ottawa): 500/page — avoids choking on complex geometry
+        Uses 200 records/page to keep geometry payload sizes well within the
+        limit that causes FEMA's ArcGIS server to 500.
         """
-        total = self._fetch_county_count(fips, client)
-        page_size = 200 if total > 2000 else 500
-        self._log(f"    {total} features, using page_size={page_size}…")
-
         features: list = []
         offset = 0
         while True:
@@ -116,17 +99,16 @@ class FemaNfhlIngestor(BaseIngestor):
                 "outSR": "4326",
                 "returnGeometry": "true",
                 "resultOffset": str(offset),
-                "resultRecordCount": str(page_size),
+                "resultRecordCount": "200",
                 "f": "geojson",
             }
             resp = client.get(_NFHL_QUERY, params=params)
             resp.raise_for_status()
-            page = resp.json()
-            batch = page.get("features", [])
+            batch = resp.json().get("features", [])
             features.extend(batch)
-            if len(batch) < page_size:
+            if len(batch) < 200:
                 break
-            offset += page_size
+            offset += 200
         return features
 
     def validate(self) -> None:
