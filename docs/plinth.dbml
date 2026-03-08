@@ -82,3 +82,198 @@ Table report_archive {
 
   Note: 'Every generated report. source_versions_json captures data lineage for audit purposes.'
 }
+
+// ─── Phase 2: Vector Ingestion ───────────────────────────────────────────────
+
+Table census_block_groups {
+  geoid    text    [pk, note: '15-digit FIPS: state(2) + county(3) + tract(6) + blkgrp(1)']
+  statefp  text    [not null]
+  countyfp text    [not null]
+  tractce  text    [not null]
+  blkgrpce text    [not null]
+  aland    bigint  [note: 'Land area in square metres']
+  awater   bigint  [note: 'Water area in square metres']
+  geom     geometry(MultiPolygon, 4326) [not null]
+
+  indexes {
+    geom     [type: gist, name: 'census_block_groups_geom_idx']
+    (statefp, countyfp) [name: 'census_block_groups_county_idx']
+  }
+
+  Note: 'Census TIGER/Line 2023 block-group geometries for Oklahoma. ACS demographic values are NOT stored here — they are fetched at query time via the Census API and cached in query_cache.'
+}
+
+Table census_tracts {
+  geoid    text    [pk, note: '11-digit FIPS: state(2) + county(3) + tract(6)']
+  statefp  text    [not null]
+  countyfp text    [not null]
+  tractce  text    [not null]
+  aland    bigint
+  awater   bigint
+  geom     geometry(MultiPolygon, 4326) [not null]
+
+  indexes {
+    geom     [type: gist, name: 'census_tracts_geom_idx']
+    (statefp, countyfp) [name: 'census_tracts_county_idx']
+  }
+
+  Note: 'Census TIGER/Line 2023 tract geometries. ACS values fetched at query time via Census API.'
+}
+
+Table fema_flood_zones {
+  gid         serial  [pk]
+  dfirm_id    text
+  fld_zone    text    [note: 'e.g. AE, X, AO, AH, VE']
+  zone_subty  text
+  sfha_tf     text    [note: 'T = Special Flood Hazard Area, F = non-SFHA']
+  bfe_revert  numeric
+  static_bfe  numeric
+  county_fips text    [note: '5-digit county FIPS']
+  source_date date
+  geom        geometry(MultiPolygon, 4326) [not null]
+
+  indexes {
+    geom        [type: gist, name: 'fema_flood_zones_geom_idx']
+    fld_zone    [name: 'fema_flood_zones_zone_idx']
+    county_fips [name: 'fema_flood_zones_county_idx']
+  }
+
+  Note: 'FEMA NFHL flood-zone polygons. Delete-then-insert per county for idempotent loads.'
+}
+
+Table fema_unmapped_areas {
+  county_fips text [pk, note: '5-digit county FIPS']
+  geom        geometry(MultiPolygon, 4326)
+
+  indexes {
+    geom [type: gist, name: 'fema_unmapped_areas_geom_idx']
+  }
+
+  Note: '''
+    County boundary minus all flood-zone polygons.
+    CRITICAL: a site that falls here has NO FEMA flood mapping —
+    it must NEVER silently appear as Zone X in report output.
+    ~15-20% of the US has no FEMA coverage.
+  '''
+}
+
+Table iecc_climate_zones {
+  zone_label       text [pk, note: 'e.g. 3A, 4C, 5B']
+  zone_description text
+  geom             geometry(MultiPolygon, 4326) [not null, note: 'All polygons for a label unioned into one MultiPolygon']
+
+  indexes {
+    geom [type: gist, name: 'iecc_climate_zones_geom_idx']
+  }
+
+  Note: 'DOE/PNNL IECC 2021 climate zone boundaries (national). One row per zone label.'
+}
+
+Table fema_nri {
+  tract_id    text    [pk, note: '11-digit census tract FIPS']
+  county_fips text    [note: 'First 5 chars of tract_id']
+  risk_score  numeric
+  risk_ratng  text    [note: 'FEMA NRI risk rating label']
+  avln_score  numeric [note: 'Avalanche']
+  cfld_score  numeric [note: 'Coastal flooding']
+  cwav_score  numeric [note: 'Cold wave']
+  drgt_score  numeric [note: 'Drought']
+  erqk_score  numeric [note: 'Earthquake']
+  hail_score  numeric [note: 'Hail']
+  hwav_score  numeric [note: 'Heat wave']
+  hrcn_score  numeric [note: 'Hurricane']
+  istm_score  numeric [note: 'Ice storm']
+  lnds_score  numeric [note: 'Landslide']
+  ltng_score  numeric [note: 'Lightning']
+  rfld_score  numeric [note: 'Riverine flooding']
+  swnd_score  numeric [note: 'Strong wind']
+  trnd_score  numeric [note: 'Tornado']
+  tsun_score  numeric [note: 'Tsunami']
+  vlcn_score  numeric [note: 'Volcanic activity']
+  wfir_score  numeric [note: 'Wildfire']
+  wntw_score  numeric [note: 'Winter weather']
+  geom        geometry(MultiPolygon, 4326) [note: 'Copied from census_tracts at load time; nullable']
+
+  indexes {
+    geom [type: gist, name: 'fema_nri_geom_idx', note: 'WHERE geom IS NOT NULL']
+  }
+
+  Note: '''
+    FEMA National Risk Index tract-level scores.
+    IMPORTANT: ALL report output using this table MUST be labeled
+    "Source: FEMA National Risk Index" — this is FEMA''s composite model,
+    not a Plinth-derived rating.
+  '''
+}
+
+Table nhd_flowlines {
+  permanent_identifier text    [pk]
+  gnis_name            text
+  lengthkm             numeric
+  ftype                integer
+  fcode                integer
+  geom                 geometry(MultiLineString, 4326) [not null]
+
+  indexes {
+    geom [type: gist, name: 'nhd_flowlines_geom_idx']
+  }
+
+  Note: 'NHDPlus HR flowlines for VPU 11 (Arkansas-White-Red). Named features only (GNIS_NAME IS NOT NULL).'
+}
+
+Table nhd_waterbodies {
+  permanent_identifier text    [pk]
+  gnis_name            text
+  areasqkm             numeric
+  ftype                integer
+  fcode                integer
+  geom                 geometry(MultiPolygon, 4326) [not null]
+
+  indexes {
+    geom [type: gist, name: 'nhd_waterbodies_geom_idx']
+  }
+
+  Note: 'NHDPlus HR waterbodies for VPU 11. Named features only.'
+}
+
+Table ssurgo_mapunits {
+  mukey  text [pk, note: 'USDA map unit key']
+  musym  text
+  muname text
+  geom   geometry(MultiPolygon, 4326) [not null]
+
+  indexes {
+    geom [type: gist, name: 'ssurgo_mapunits_geom_idx']
+  }
+
+  Note: 'USDA SSURGO map-unit polygons for NE Oklahoma survey areas.'
+}
+
+Table ssurgo_muaggatt {
+  mukey        text    [pk]
+  hydgrpdcd    text    [note: 'Hydrologic soil group (A/B/C/D)']
+  drclassddc   text    [note: 'Drainage class']
+  slopegraddcp numeric [note: 'Representative slope gradient (%)']
+  taxclname    text    [note: 'Taxonomic classification name']
+
+  Note: 'SSURGO map-unit aggregated attributes (tabular — no geometry).'
+}
+
+Table ssurgo_component {
+  cokey       text    [pk, note: 'USDA component key']
+  mukey       text    [not null, ref: > ssurgo_mapunits.mukey]
+  compname    text
+  comppct_r   numeric [note: 'Representative component percentage']
+  majcompflag text    [note: 'Yes/No — is this the major component?']
+
+  indexes {
+    mukey [name: 'ssurgo_component_mukey_idx']
+  }
+
+  Note: 'SSURGO soil components (tabular — no geometry). References ssurgo_mapunits.'
+}
+
+// ─── Cross-table references ───────────────────────────────────────────────────
+
+Ref: fema_nri.tract_id - census_tracts.geoid
+Ref: fema_flood_zones.county_fips > fema_unmapped_areas.county_fips

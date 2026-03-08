@@ -20,49 +20,76 @@ def ingest() -> None:
 @click.option("--region", default="ne-oklahoma", show_default=True,
               help="Named region or 'minx,miny,maxx,maxy' bounding box.")
 def ingest_all(region: str) -> None:
-    """Run all ingestors in dependency order for a region."""
+    """Run all Phase 2 ingestors in dependency order for a region."""
     click.echo(f"Ingesting all datasets for region: {region}")
-    _require_ingestor("ingest all")
+
+    from plinth.ingest.census_tiger import CensusTigerIngestor
+    from plinth.ingest.fema_nfhl import FemaNfhlIngestor
+    from plinth.ingest.iecc import IeccIngestor
+    from plinth.ingest.fema_nri import FemaNriIngestor
+    from plinth.ingest.nhd import NhdIngestor
+    from plinth.ingest.ssurgo import SsurgoIngestor
+
+    CensusTigerIngestor().run(region)
+    FemaNfhlIngestor().run(region)
+    IeccIngestor().run()
+    FemaNriIngestor().run()
+    NhdIngestor().run(region)
+    SsurgoIngestor().run(region)
+
+    click.echo("All Phase 2 ingestors complete.")
 
 
 @ingest.command("fema-nfhl")
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_fema_nfhl(region: str) -> None:
     """Ingest FEMA National Flood Hazard Layer."""
-    _require_ingestor("fema-nfhl")
+    from plinth.ingest.fema_nfhl import FemaNfhlIngestor
+
+    FemaNfhlIngestor().run(region)
 
 
 @ingest.command("census-tiger")
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_census_tiger(region: str) -> None:
     """Ingest Census TIGER/Line block groups and tracts."""
-    _require_ingestor("census-tiger")
+    from plinth.ingest.census_tiger import CensusTigerIngestor
+
+    CensusTigerIngestor().run(region)
 
 
 @ingest.command("iecc")
 def ingest_iecc() -> None:
     """Ingest IECC climate zone boundaries."""
-    _require_ingestor("iecc")
+    from plinth.ingest.iecc import IeccIngestor
+
+    IeccIngestor().run()
 
 
 @ingest.command("fema-nri")
 def ingest_fema_nri() -> None:
     """Ingest FEMA National Risk Index (tract-level CSV)."""
-    _require_ingestor("fema-nri")
+    from plinth.ingest.fema_nri import FemaNriIngestor
+
+    FemaNriIngestor().run()
 
 
 @ingest.command("nhd")
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_nhd(region: str) -> None:
     """Ingest NHDPlus High Resolution hydrography."""
-    _require_ingestor("nhd")
+    from plinth.ingest.nhd import NhdIngestor
+
+    NhdIngestor().run(region)
 
 
 @ingest.command("ssurgo")
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_ssurgo(region: str) -> None:
     """Ingest USDA SSURGO soils data."""
-    _require_ingestor("ssurgo")
+    from plinth.ingest.ssurgo import SsurgoIngestor
+
+    SsurgoIngestor().run(region)
 
 
 @ingest.command("usgs-3dep")
