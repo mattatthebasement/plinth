@@ -273,6 +273,27 @@ Table ssurgo_component {
   Note: 'SSURGO soil components (tabular — no geometry). References ssurgo_mapunits.'
 }
 
+Table noaa_climate_normals {
+  station_id  text    [pk, note: 'NOAA station identifier (e.g. USW00013967)']
+  name        text    [not null, note: 'Station display name']
+  elevation_m numeric [note: 'Station elevation in metres']
+  geom        geometry(Point,4326) [not null]
+
+  tmax        numeric[] [note: 'Monthly avg daily max temp °F, Jan-Dec (12-element array)']
+  tmin        numeric[] [note: 'Monthly avg daily min temp °F, Jan-Dec']
+  tavg        numeric[] [note: 'Monthly avg temp °F, Jan-Dec']
+  prcp        numeric[] [note: 'Monthly total precipitation inches, Jan-Dec']
+  snow        numeric[] [note: 'Monthly total snowfall inches, Jan-Dec']
+  htdd        numeric[] [note: 'Monthly heating degree days, Jan-Dec']
+  cldd        numeric[] [note: 'Monthly cooling degree days, Jan-Dec']
+
+  indexes {
+    geom [type: gist, name: 'noaa_climate_normals_geom_idx']
+  }
+
+  Note: 'NOAA 1991-2020 Climate Normals (monthly, per station). Source: NCEI bulk archive. Decadal refresh.'
+}
+
 // ─── Cross-table references ───────────────────────────────────────────────────
 
 Ref: fema_nri.tract_id - census_tracts.geoid

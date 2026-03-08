@@ -122,7 +122,9 @@ def ingest_usda_whp() -> None:
 @ingest.command("noaa-normals")
 def ingest_noaa_normals() -> None:
     """Ingest NOAA 1991-2020 Climate Normals station data."""
-    _require_ingestor("noaa-normals")
+    from plinth.ingest.noaa_normals import NoaaNormalsIngestor
+
+    NoaaNormalsIngestor().run()
 
 
 def _require_ingestor(name: str) -> None:
