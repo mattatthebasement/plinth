@@ -42,11 +42,16 @@ class SsurgoIngestor(BaseIngestor):
     source_name = "usda-ssurgo"
     update_frequency = "annual"
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._data_fresh = False  # True when download() skipped due to fresh cache
+
     def download(self, region: Optional[str] = None) -> None:
         """Fetch SSURGO map units and components from NRCS web services."""
         meta_path = self.staging_dir / "meta.json"
         if self._is_fresh(meta_path, ttl_days=30):
             self._log("SSURGO data is up-to-date (< 30 days old).")
+            self._data_fresh = True
             return
 
         areas = list(NE_OK_SURVEY_AREAS.keys())
@@ -187,7 +192,16 @@ class SsurgoIngestor(BaseIngestor):
             cache_path.write_text(json.dumps([]))
 
     def validate(self) -> None:
-        """Verify staging table and component cache are present."""
+        """Verify staging table and component cache are present.
+
+        When download() was skipped due to a fresh cache, the WFS staging
+        table has already been consumed by a prior load(). In that case
+        validation is a no-op — the data already lives in PostGIS.
+        """
+        if self._data_fresh:
+            self._log("Skipping staging validation (data already loaded).")
+            return
+
         from plinth.db.connection import get_connection
 
         with get_connection() as conn:
@@ -211,6 +225,9 @@ class SsurgoIngestor(BaseIngestor):
 
     def load(self) -> None:
         """Upsert map units, muaggatt attributes, and components into PostGIS."""
+        if self._data_fresh:
+            self._log("Skipping load (data already loaded from prior run).")
+            return
         self._load_mapunits_and_muaggatt()
         self._load_components()
 
