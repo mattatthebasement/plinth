@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     census_api_key: str = ""
     epa_aqs_key: str = ""
     epa_aqs_email: str = ""
+    fcc_api_token: str = ""
 
     # Regional bounding box (NE Oklahoma for POC)
     region_bbox_minx: float = -96.5
