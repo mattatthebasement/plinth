@@ -97,14 +97,18 @@ def ingest_ssurgo(region: str) -> None:
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_usgs_3dep(region: str) -> None:
     """Ingest USGS 3DEP digital elevation model tiles."""
-    _require_ingestor("usgs-3dep")
+    from plinth.ingest.usgs_3dep import Usgs3depIngestor
+
+    Usgs3depIngestor().run(region)
 
 
 @ingest.command("nlcd")
 @click.option("--region", default="ne-oklahoma", show_default=True)
 def ingest_nlcd(region: str) -> None:
     """Ingest NLCD national land cover raster."""
-    _require_ingestor("nlcd")
+    from plinth.ingest.nlcd import NlcdIngestor
+
+    NlcdIngestor().run(region)
 
 
 @ingest.command("usgs-seismic")

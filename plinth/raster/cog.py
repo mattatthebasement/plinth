@@ -14,5 +14,45 @@ def to_cog(src: Path, dst: Path, *, reproject_epsg: int | None = None) -> Path:
     gdalwarp before COG conversion.
 
     Raises subprocess.CalledProcessError on failure.
+    Returns *dst*.
     """
-    raise NotImplementedError("COG conversion — Phase 3")
+    work = src
+
+    if reproject_epsg is not None:
+        reprojected = dst.with_suffix(".reprojected.tif")
+        subprocess.run(
+            [
+                "gdalwarp",
+                "-t_srs", f"EPSG:{reproject_epsg}",
+                "-r", "bilinear",
+                "-co", "TILED=YES",
+                str(work),
+                str(reprojected),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        work = reprojected
+
+    subprocess.run(
+        [
+            "gdal_translate",
+            "-of", "COG",
+            "-co", "COMPRESS=DEFLATE",
+            "-co", "PREDICTOR=2",
+            "-co", "TILED=YES",
+            "-co", "BLOCKXSIZE=512",
+            "-co", "BLOCKYSIZE=512",
+            "-co", "OVERVIEWS=AUTO",
+            "-co", "RESAMPLING=AVERAGE",
+            str(work),
+            str(dst),
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+    if reproject_epsg is not None and work != src:
+        work.unlink(missing_ok=True)
+
+    return dst
