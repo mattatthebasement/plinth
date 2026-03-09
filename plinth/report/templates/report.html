@@ -617,11 +617,11 @@
     <tbody>
       <tr>
         <td class="row-label">Max Temp (°F)</td>
-        {% for v in climate.tmax_f %}<td>{{ "%.0f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.tmax_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "%.0f"|format(v) }}</td>{% endfor %}
       </tr>
       <tr>
         <td class="row-label">Min Temp (°F)</td>
-        {% for v in climate.tmin_f %}<td>{{ "%.0f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.tmin_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "%.0f"|format(v) }}</td>{% endfor %}
       </tr>
       <tr>
         <td class="row-label">Precip (in)</td>
