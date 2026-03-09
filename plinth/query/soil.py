@@ -6,6 +6,11 @@ from typing import Any
 
 from plinth.db.connection import get_connection
 
+# Gap thresholds for nearest-unit fallback
+_NEAR_GAP_M = 200    # Small gap — likely road or creek edge; data still representative
+_FAR_GAP_M = 500     # Larger gap — data may not represent actual site soils
+_MAX_GAP_M = 500     # Beyond this, return unavailable rather than a distant proxy
+
 
 def query_soil(lat: float, lon: float) -> dict[str, Any]:
     """
@@ -14,12 +19,14 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
     Joins ssurgo_mapunits → ssurgo_muaggatt (aggregate attributes) →
     ssurgo_component (dominant component by comppct_r).
 
-    If the point falls in a coverage gap (roads, water, unmapped areas),
-    falls back to the nearest map unit within 500 m.
-
-    Returns map unit key/name, hydrologic group, drainage class, slope,
-    taxonomic classification, and the dominant component name.
+    Gap handling:
+    - Point inside a polygon: exact match, no flag.
+    - Gap < 200 m: nearest unit returned with minor flag (road/creek edge).
+    - Gap 200–500 m: nearest unit returned with prominent distance warning.
+    - Gap > 500 m: returns unavailable — site is in a developed/urban area
+      not covered by SSURGO county-level mapping.
     """
+    geo_point = f"ST_SetSRID(ST_MakePoint({lon}, {lat}), 4326)::geography"
     point = f"ST_SetSRID(ST_MakePoint({lon}, {lat}), 4326)"
 
     with get_connection() as conn:
@@ -34,7 +41,7 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
                     a.drclassdcd,
                     a.slopegraddcp,
                     a.taxclname,
-                    false AS is_nearest
+                    0.0 AS gap_m
                 FROM ssurgo_mapunits m
                 LEFT JOIN ssurgo_muaggatt a ON a.mukey = m.mukey
                 WHERE ST_Contains(m.geom, {point})
@@ -44,8 +51,7 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
             row = cur.fetchone()
 
     if not row:
-        # Coverage gap (road, water, etc.) — fall back to nearest unit within 500 m
-        # ~0.0045 degrees at mid-latitudes
+        # Coverage gap — find nearest unit and measure exact distance
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -58,11 +64,11 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
                         a.drclassdcd,
                         a.slopegraddcp,
                         a.taxclname,
-                        true AS is_nearest
+                        ST_Distance(m.geom::geography, {geo_point}) AS gap_m
                     FROM ssurgo_mapunits m
                     LEFT JOIN ssurgo_muaggatt a ON a.mukey = m.mukey
-                    WHERE ST_DWithin(m.geom, {point}, 0.015)
-                    ORDER BY ST_Distance(m.geom, {point})
+                    WHERE ST_DWithin(m.geom::geography, {geo_point}, {_MAX_GAP_M})
+                    ORDER BY gap_m
                     LIMIT 1
                     """,
                 )
@@ -71,10 +77,27 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
     if not row:
         return {
             "available": False,
-            "flag": "No SSURGO soil map unit found for this location.",
+            "flag": (
+                "No SSURGO soil data within 500 m of this location. The site is likely "
+                "in a developed or urban area not covered by county-level SSURGO mapping. "
+                "Consult a licensed soil scientist or geotechnical engineer for "
+                "site-specific soil characterization."
+            ),
         }
 
-    mukey, musym, muname, hydgrpdcd, drclassdcd, slopegraddcp, taxclname, is_nearest = row
+    mukey, musym, muname, hydgrpdcd, drclassdcd, slopegraddcp, taxclname, gap_m = row
+
+    # Beyond max gap — refuse to return a distant proxy
+    if gap_m > _MAX_GAP_M:
+        return {
+            "available": False,
+            "flag": (
+                f"Nearest SSURGO map unit is {gap_m:.0f} m away. The site is likely in a "
+                "developed or urban area not covered by county-level SSURGO mapping. "
+                "Consult a licensed soil scientist or geotechnical engineer for "
+                "site-specific soil characterization."
+            ),
+        }
 
     # Fetch the dominant component (highest comppct_r)
     with get_connection() as conn:
@@ -113,12 +136,22 @@ def query_soil(lat: float, lon: float) -> dict[str, Any]:
             }
             for c in components
         ],
+        "gap_m": round(gap_m, 0) if gap_m > 0 else None,
     }
 
-    if is_nearest:
+    if 0 < gap_m <= _NEAR_GAP_M:
         result["flag"] = (
-            "Point falls in a SSURGO coverage gap (road, water, or unmapped area). "
-            "Nearest map unit returned."
+            f"Point falls in a small SSURGO coverage gap ({gap_m:.0f} m — likely a road, "
+            "water body, or parcel edge). Nearest map unit returned; values are likely "
+            "representative of on-site conditions."
+        )
+    elif gap_m > _NEAR_GAP_M:
+        result["flag"] = (
+            f"Point is {gap_m:.0f} m from the nearest SSURGO map unit. The site may be "
+            "in a developed or disturbed area. Soil data shown is from the nearest mapped "
+            "unit and may not represent actual on-site conditions. Verify with USDA Web "
+            "Soil Survey or a licensed soil scientist."
         )
 
     return result
+

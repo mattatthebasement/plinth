@@ -46,7 +46,11 @@ def query_noaa_normals(lat: float, lon: float) -> dict[str, Any]:
                     ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
                     %s
                 )
-                ORDER BY dist_m
+                ORDER BY
+                    -- Prefer official ASOS/COOP stations (USW/USC) over CoCoRaHS (US1)
+                    -- which typically lack temperature and degree-day data
+                    CASE WHEN station_id LIKE 'USW%%' OR station_id LIKE 'USC%%' THEN 0 ELSE 1 END,
+                    dist_m
                 LIMIT 1
                 """,
                 (lon, lat, lon, lat, max_dist_m),

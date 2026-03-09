@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import base64
+import io
 import logging
 import uuid
 from datetime import date
 from typing import Any
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import numpy as np
 
 from astral import LocationInfo
 from astral.sun import sun
@@ -131,11 +139,15 @@ def _build_flood(flood_q: dict) -> dict:
             "nfhl_date": "",
             "mapped": flood_q.get("mapped", False),
         }
+    bfe = flood_q.get("bfe_ft")
+    # FEMA NFHL uses -9999 as a sentinel for "BFE not established"
+    if bfe is not None and bfe <= -9990:
+        bfe = None
     return {
-        "zone": flood_q.get("fld_zone", "Unknown"),
+        "zone": flood_q.get("zone", "Unknown"),
         "subtype": flood_q.get("zone_subty", ""),
         "sfha": flood_q.get("sfha", False),
-        "bfe_ft": flood_q.get("bfe_ft"),
+        "bfe_ft": bfe,
         "nfhl_date": flood_q.get("source_date", ""),
         "mapped": flood_q.get("mapped", True),
     }
@@ -228,6 +240,73 @@ def _build_air_quality(aqs_q: dict) -> dict:
     return result
 
 
+def _nri_hazard_bar_chart(hazards: dict[str, float]) -> str | None:
+    """
+    Generate a horizontal bar chart for NRI hazard component scores.
+    Returns a base64-encoded PNG data URI, or None if hazards is empty.
+
+    Bars use a green→yellow→red gradient keyed to score (0=green, 50=yellow, 100=red).
+    """
+    if not hazards:
+        return None
+
+    labels = list(hazards.keys())
+    scores = [hazards[k] for k in labels]
+    sorted_pairs = sorted(zip(scores, labels), reverse=True)
+    scores_sorted, labels_sorted = zip(*sorted_pairs)
+
+    n = len(labels_sorted)
+    bar_height = 0.32
+    fig_height = max(2.0, n * 0.26 + 0.5)
+    fig, ax = plt.subplots(figsize=(5.5, fig_height))
+
+    # Build per-bar colors from a green→yellow→red colormap
+    cmap = mcolors.LinearSegmentedColormap.from_list(
+        "nri_gradient",
+        [(0.0, "#2e7d32"), (0.5, "#f9a825"), (1.0, "#c62828")],
+    )
+    colors = [cmap(s / 100.0) for s in scores_sorted]
+
+    bars = ax.barh(
+        range(n),
+        scores_sorted,
+        height=bar_height,
+        color=colors,
+        edgecolor="none",
+    )
+
+    # Score labels at right tip of each bar
+    for bar, score in zip(bars, scores_sorted):
+        ax.text(
+            bar.get_width() + 0.8,
+            bar.get_y() + bar.get_height() / 2,
+            f"{score:.1f}",
+            va="center",
+            ha="left",
+            fontsize=7,
+            color="#333333",
+        )
+
+    ax.set_yticks(range(n))
+    ax.set_yticklabels(labels_sorted, fontsize=7.5)
+    ax.set_xlim(0, 110)
+    ax.set_xlabel("FEMA NRI Score (0–100 percentile)", fontsize=7, color="#555555")
+    ax.tick_params(axis="x", labelsize=7, colors="#555555")
+    ax.tick_params(axis="y", colors="#333333")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.xaxis.grid(True, linestyle="--", linewidth=0.4, color="#dddddd", zorder=0)
+    ax.set_axisbelow(True)
+
+    plt.tight_layout(pad=0.4)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return "data:image/png;base64," + base64.b64encode(buf.read()).decode("ascii")
+
+
 def _build_fema_nri(nri_q: dict) -> dict:
     if not nri_q.get("available", False):
         return {
@@ -239,15 +318,17 @@ def _build_fema_nri(nri_q: dict) -> dict:
     # The query returns hazard_scores keyed by display name
     hazard_scores_raw = nri_q.get("hazard_scores", {})
     hazards = {
-        name: score
+        name: round(score, 1)
         for name, score in hazard_scores_raw.items()
         if score is not None and score > 0
     }
+    raw_score = nri_q.get("risk_score")
     return {
         "tract_id": nri_q.get("tract_id", ""),
-        "risk_score": nri_q.get("risk_score"),
+        "risk_score": round(raw_score, 1) if raw_score is not None else None,
         "risk_ratng": nri_q.get("risk_ratng", ""),
         "hazards": hazards,
+        "hazard_chart": _nri_hazard_bar_chart(hazards),
     }
 
 
@@ -513,13 +594,16 @@ def _build_risk_summary(
     whp_val_str = f"{whp:,} / {whp_max:,}" if whp is not None else "N/A"
     rows.append({"category": "Wildfire WHP", "value": whp_val_str, "source": "USDA Forest Service 2023"})
 
-    # Soil
-    hyd_grp = soil.get("hydrologic_group", "")
-    drain = soil.get("drainage_class", "")
-    soil_val = f"{hyd_grp} — {drain}" if hyd_grp or drain else "N/A"
+    # Soil — show unavailable clearly when no data within threshold
+    if soil.get("available"):
+        hyd_grp = soil.get("hydrologic_group", "")
+        drain = soil.get("drainage_class", "")
+        soil_val = f"{hyd_grp} — {drain}" if hyd_grp or drain else "N/A"
+    else:
+        soil_val = "Unavailable — developed/urban area"
     rows.append({"category": "Hydrologic Group", "value": soil_val, "source": "USDA SSURGO"})
 
-    # Air Quality
+    # Air Quality — suppress entirely when unavailable (no API key or no monitor)
     if air_quality.get("available"):
         pm25 = air_quality.get("pm25_annual")
         if pm25 is not None:
@@ -528,10 +612,6 @@ def _build_risk_summary(
                 "value": f"PM\u2082.\u2085 {pm25:.1f} \u00b5g/m\u00b3 (NAAQS: 9.0)",
                 "source": f"EPA AQS {air_quality.get('year', '')}",
             })
-        else:
-            rows.append({"category": "Air Quality", "value": "N/A", "source": "EPA AQS"})
-    else:
-        rows.append({"category": "Air Quality", "value": "Data unavailable", "source": "EPA AQS"})
 
     # FEMA NRI
     nri_score = fema_nri.get("risk_score")
@@ -566,6 +646,7 @@ def build_context(
         report_id = f"PLN-{date.today().strftime('%Y%m%d')}-{uuid.uuid4().hex[:5].upper()}"
     if report_date is None:
         report_date = date.today().strftime("%B %-d, %Y")
+    report_year = date.today().year
 
     # ── Run all queries ───────────────────────────────────────────────────
     flood_q = _safe_query("flood_zone", q_module.query_flood_zone, lat, lon,
@@ -678,6 +759,7 @@ def build_context(
         "lon": lon,
         "report_id": report_id,
         "report_date": report_date,
+        "report_year": report_year,
         "prepared_for": prepared_for,
 
         # Section 1 — Executive Summary

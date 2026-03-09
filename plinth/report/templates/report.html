@@ -9,6 +9,7 @@
 </style>
 </head>
 <body>
+<span class="copyright-capture">Copyright © {{ report_year }}, Architactile, LLC.</span>
 
 {# ─────────────────────────────────────────────────────────────────────────
    COVER PAGE
@@ -57,10 +58,6 @@
     <div class="cover-meta-row">
       <div class="cover-meta-label">Prepared For</div>
       <div class="cover-meta-value">{{ prepared_for }}</div>
-    </div>
-    <div class="cover-meta-row">
-      <div class="cover-meta-label">IECC Climate Zone</div>
-      <div class="cover-meta-value">Zone {{ iecc_zone }} — {{ iecc_description }}</div>
     </div>
   </div>
 
@@ -291,7 +288,8 @@
     </div>
   </div>
 
-  {# Soil Profile #}
+  {# Soil Profile — suppressed when no SSURGO data within threshold #}
+  {% if soil.available %}
   <div class="avoid-break">
     <h3>Soil Profile — USDA SSURGO</h3>
     <div class="kv-grid">
@@ -329,11 +327,12 @@
       soil investigation. Source: USDA NRCS SSURGO database.
     </div>
   </div>
+  {% endif %}
 
-  {# Air Quality #}
+  {# Air Quality — suppressed when EPA AQS credentials are not configured #}
+  {% if air_quality.available %}
   <div class="avoid-break">
     <h3>Air Quality — EPA Air Quality System (AQS)</h3>
-    {% if air_quality.available %}
     <div class="kv-grid">
       <div class="kv-row">
         <div class="kv-label">PM₂.₅ Annual</div>
@@ -352,33 +351,24 @@
         <div class="kv-value">{{ air_quality.year }}</div>
       </div>
     </div>
-    {% else %}
-    <p class="data-unavailable">{{ air_quality.flag }}</p>
-    {% endif %}
     <div class="inline-disclaimer">
       EPA AQS data typically lags 6–18 months from current conditions and is measured at fixed
       monitoring stations that may not reflect site-level air quality. This is not a real-time
       air quality index. No health assessment is made or implied. Source: EPA Air Quality System.
     </div>
   </div>
+  {% endif %}
 
   {# FEMA NRI #}
   <div class="avoid-break">
     <h3>FEMA National Risk Index — Composite Hazard Risk Score</h3>
-    <div class="inline-disclaimer warning" style="margin-bottom:8pt;">
-      <strong>Attribution required by source:</strong>
-      The values below are produced by FEMA's National Risk Index model — a composite
-      score developed and published by FEMA. This is FEMA's model output, not a rating
-      derived by Plinth. See <a href="https://hazards.fema.gov/nri/">https://hazards.fema.gov/nri/</a> for full methodology.
-      Source: FEMA National Risk Index.
-    </div>
     <div class="kv-grid">
       <div class="kv-row">
         <div class="kv-label">Census Tract</div>
         <div class="kv-value">{{ fema_nri.tract_id }}</div>
       </div>
       <div class="kv-row">
-        <div class="kv-label">NRI Risk Score</div>
+        <div class="kv-label">Composite FEMA NRI Score</div>
         <div class="kv-value"><strong>{{ fema_nri.risk_score }} — {{ fema_nri.risk_ratng }}</strong></div>
       </div>
     </div>
@@ -401,7 +391,10 @@
       to the national distribution. For full methodology, data dictionary, and interactive
       map, see <a href="https://hazards.fema.gov/nri/">https://hazards.fema.gov/nri/</a>.
     </div>
-    <h4>Hazard Component Scores (FEMA NRI — Source: FEMA, not Plinth-derived)</h4>
+    <h4>FEMA National Risk Index — Component Hazard Risk Scores</h4>
+    {% if fema_nri.hazard_chart %}
+    <img src="{{ fema_nri.hazard_chart }}" alt="NRI Hazard Component Scores" style="width:100%;max-width:520px;display:block;margin:6pt 0;">
+    {% else %}
     <table class="data-table avoid-break">
       <thead>
         <tr>
@@ -418,6 +411,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endif %}
   </div>
 </div>
 
@@ -473,7 +467,7 @@
           </div>
         </div>
         <div class="inline-disclaimer">
-          {% if slope.max_slope_pct > 15 %}
+          {% if slope.max_slope_pct is not none and slope.max_slope_pct > 15 %}
           Slope exceeds 15% — consult a licensed civil engineer regarding grading and drainage requirements.
           {% else %}
           Slope values are DEM-derived estimates ({{ slope.radius_m }}m radius). Site-specific grading
@@ -548,7 +542,11 @@
       <div class="kv-row">
         <div class="kv-label">Nearest Waterbody</div>
         <div class="kv-value">
-          {{ hydro.waterbody.name }} ({{ hydro.waterbody.type }}) —
+          {% if hydro.waterbody.name and hydro.waterbody.name != "Unnamed" %}
+            {{ hydro.waterbody.name }} ({{ hydro.waterbody.type }}) —
+          {% else %}
+            Unnamed {{ hydro.waterbody.type }} —
+          {% endif %}
           {{ "%.2f"|format(hydro.waterbody.distance_mi) }} mi
         </div>
       </div>
@@ -557,7 +555,11 @@
       <div class="kv-row">
         <div class="kv-label">Nearest Flowline</div>
         <div class="kv-value">
-          {{ hydro.flowline.name }} ({{ hydro.flowline.type }}) —
+          {% if hydro.flowline.name and hydro.flowline.name != "Unnamed" %}
+            {{ hydro.flowline.name }} ({{ hydro.flowline.type }}) —
+          {% else %}
+            Unnamed {{ hydro.flowline.type }} —
+          {% endif %}
           {{ "%.2f"|format(hydro.flowline.distance_mi) }} mi
         </div>
       </div>
@@ -588,7 +590,7 @@
     <div class="kv-row">
       <div class="kv-label">Distance from Site</div>
       <div class="kv-value">{{ climate.distance_mi }} miles
-        {% if climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi; values may not reflect site microclimate</em>{% endif %}
+        {% if climate.distance_mi is not none and climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi; values may not reflect site microclimate</em>{% endif %}
       </div>
     </div>
     <div class="kv-row">
@@ -834,16 +836,7 @@
     </tbody>
   </table>
 
-  <h3>Road &amp; Transportation Access</h3>
-  <p>{{ infrastructure.road_note }}</p>
-  <p>{{ infrastructure.transit_note }}</p>
-
-  <h3>Water &amp; Sewer</h3>
-  <div class="inline-disclaimer">
-    {{ infrastructure.water_sewer_note }}
-    No authoritative national data source for municipal water/sewer service area boundaries
-    is currently available in this platform.
-  </div>
+  {# Road/Transit and Water/Sewer are not yet implemented — suppress until data is available #}
 </div>
 
 

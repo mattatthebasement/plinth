@@ -45,6 +45,14 @@ def fetch(lat: float, lon: float, county_fips: str) -> dict[str, Any]:
     county_fips is the 5-digit county FIPS (e.g. '40131' for Rogers County OK).
     Checks query_cache first; calls the API on miss.
     """
+    # Credential check before cache — so missing credentials always suppress the section
+    settings = get_settings()
+    if not settings.epa_aqs_key or not settings.epa_aqs_email:
+        return {
+            "available": False,
+            "flag": "EPA AQS credentials not configured — air quality data unavailable.",
+        }
+
     year = _current_year()
     cache_key = _cache_key(county_fips, year)
     cached = get_cached(cache_key)

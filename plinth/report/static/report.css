@@ -5,35 +5,41 @@
 /* ── Page Setup ─────────────────────────────────────────────────── */
 @page {
     size: letter portrait;
-    margin: 0.75in 0.75in 1.0in 0.75in;
-    @bottom-center {
-        content: "Plinth · site-intelligence.com · " string(report-id);
+    margin: 0.75in 0.75in 0.5in 0.75in;
+    @bottom-left {
+        content: string(copyright-text);
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        font-size: 7.5pt;
+        font-size: 7pt;
+        font-style: italic;
         color: #888;
-        border-top: 0.5pt solid #ddd;
-        padding-top: 4pt;
+        border-top: 0.5pt solid #ccc;
+        padding-top: 3pt;
+        height: 14pt;
+        vertical-align: top;
         width: 100%;
-        text-align: center;
     }
     @bottom-right {
-        content: "Page " counter(page) " of " counter(pages);
+        content: counter(page);
         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-        font-size: 7.5pt;
+        font-size: 7pt;
         color: #888;
-        padding-top: 4pt;
+        border-top: 0.5pt solid #ccc;
+        padding-top: 3pt;
+        height: 14pt;
+        vertical-align: top;
     }
 }
 
 @page cover {
     margin: 0;
-    @bottom-center { content: none; }
-    @bottom-right  { content: none; }
+    counter-increment: page 0;
+    @bottom-left  { content: none; border-top: none; }
+    @bottom-right { content: none; border-top: none; }
 }
 
 @page toc {
-    @bottom-center { content: none; }
-    @bottom-right  { content: none; }
+    @bottom-left  { content: none; border-top: none; }
+    @bottom-right { content: none; border-top: none; }
 }
 
 /* ── Typography ─────────────────────────────────────────────────── */
@@ -63,6 +69,16 @@ li { margin-bottom: 3pt; }
 .report-id-capture {
     string-set: report-id content();
     display: inline;
+}
+
+/* ── Copyright footer running string ───────────────────────────── */
+.copyright-capture {
+    string-set: copyright-text content();
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
 }
 
 /* ── Cover Page ─────────────────────────────────────────────────── */

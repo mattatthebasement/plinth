@@ -10,20 +10,20 @@ _MI_TO_M = 1609.344
 
 # NHD ftype codes for waterbodies
 _FTYPE_LABELS = {
-    390: "LakePond",
+    390: "Lake/Pond",
     436: "Reservoir",
-    466: "SwampMarsh",
+    466: "Swamp/Marsh",
     493: "Estuary",
     361: "Playa",
-    378: "IceMass",
+    378: "Ice Mass",
 }
 
 # NHD ftype codes for flowlines
 _FLOWLINE_LABELS = {
-    460: "StreamRiver",
-    558: "ArtificialPath",
+    460: "Stream/River",
+    558: "Artificial Path",
     334: "Connector",
-    336: "CanalDitch",
+    336: "Canal/Ditch",
     420: "Underground Conduit",
     428: "Pipeline",
 }
