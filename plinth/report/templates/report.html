@@ -634,6 +634,16 @@
     </tbody>
   </table>
 
+  <h4>Metric Definitions</h4>
+  <dl class="metric-defs">
+    <dt>Heating Degree Days (HDD)</dt>
+    <dd>The sum of degrees per day that the mean temperature falls below 65°F over a year. A day averaging 45°F contributes 20 HDD. Used to estimate heating energy demand — higher HDD = more heating needed.</dd>
+    <dt>Cooling Degree Days (CDD)</dt>
+    <dd>The sum of degrees per day that the mean temperature exceeds 65°F over a year. A day averaging 85°F contributes 20 CDD. Used to estimate cooling/AC energy demand.</dd>
+    <dt>Freeze-Thaw Days</dt>
+    <dd>The number of days per year where the temperature crosses the 32°F (0°C) threshold — either rising above or dropping below freezing within the same day. Relevant for pavement and concrete durability, since repeated freeze-thaw cycles cause cracking and spalling.</dd>
+  </dl>
+
   <div class="inline-disclaimer">
     Climate values are NOAA 1991–2020 climate normals measured at {{ climate.station_name }},
     {{ climate.distance_mi }} miles from the site. Station-based normals may not reflect

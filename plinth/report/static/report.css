@@ -454,6 +454,25 @@ table.solar-table td.row-label {
     font-size: 8pt;
 }
 
+/* ── Metric definition list ─────────────────────────────────────── */
+dl.metric-defs {
+    margin: 0 0 10pt;
+    padding: 0;
+    font-size: 8pt;
+}
+
+dl.metric-defs dt {
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 5pt 0 1pt;
+}
+
+dl.metric-defs dd {
+    margin: 0 0 4pt 12pt;
+    color: #333;
+    line-height: 1.4;
+}
+
 /* ── Score context boxes ────────────────────────────────────────── */
 .score-context {
     background: #f5f5f5;
