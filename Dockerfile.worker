@@ -2,6 +2,8 @@ FROM python:3.12-slim
 
 # Install GDAL and required system libraries.
 # GDAL must be present before Python packages that wrap it (rasterio) are installed.
+# WeasyPrint requires Pango (libpango-1.0-0), GObject (libgobject-2.0-0), and
+# Cairo (libcairo2) for HTML→PDF rendering.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gdal-bin \
     libgdal-dev \
@@ -12,6 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     unzip \
     git \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgobject-2.0-0 \
+    libcairo2 \
+    libffi-dev \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

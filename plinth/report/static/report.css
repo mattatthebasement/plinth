@@ -1,0 +1,495 @@
+/* ================================================================
+   Plinth Site Intelligence Report — WeasyPrint-optimized CSS
+   ================================================================ */
+
+/* ── Page Setup ─────────────────────────────────────────────────── */
+@page {
+    size: letter portrait;
+    margin: 0.75in 0.75in 1.0in 0.75in;
+    @bottom-center {
+        content: "Plinth · site-intelligence.com · " string(report-id);
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #888;
+        border-top: 0.5pt solid #ddd;
+        padding-top: 4pt;
+        width: 100%;
+        text-align: center;
+    }
+    @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 7.5pt;
+        color: #888;
+        padding-top: 4pt;
+    }
+}
+
+@page cover {
+    margin: 0;
+    @bottom-center { content: none; }
+    @bottom-right  { content: none; }
+}
+
+@page toc {
+    @bottom-center { content: none; }
+    @bottom-right  { content: none; }
+}
+
+/* ── Typography ─────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 0;
+}
+
+h1 { font-size: 18pt; font-weight: 700; margin: 0 0 4pt; }
+h2 { font-size: 12pt; font-weight: 700; margin: 0 0 8pt; color: #1a1a1a; }
+h3 { font-size: 10pt; font-weight: 600; margin: 14pt 0 5pt; color: #2c2c2c; }
+h4 { font-size: 9pt;  font-weight: 600; margin: 10pt 0 4pt; color: #444; }
+
+p  { margin: 0 0 7pt; }
+ul { margin: 0 0 7pt; padding-left: 16pt; }
+li { margin-bottom: 3pt; }
+
+.nowrap { white-space: nowrap; }
+
+/* ── Report ID running string (picked up by @page footer) ───────── */
+.report-id-capture {
+    string-set: report-id content();
+    display: inline;
+}
+
+/* ── Cover Page ─────────────────────────────────────────────────── */
+.cover {
+    page: cover;
+    page-break-after: always;
+    background: #fff;
+    width: 100%;
+    min-height: 100vh;
+    display: block;
+    padding: 0.75in 0.75in 0.6in;
+}
+
+.cover-header {
+    border-bottom: 2pt solid #1a1a1a;
+    padding-bottom: 12pt;
+    margin-bottom: 24pt;
+}
+
+.cover-logo {
+    font-size: 22pt;
+    font-weight: 800;
+    letter-spacing: -0.5pt;
+    color: #1a1a1a;
+}
+
+.cover-logo span {
+    font-weight: 300;
+    color: #555;
+}
+
+.cover-tagline {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 2pt;
+}
+
+.cover-report-type {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    margin-bottom: 16pt;
+}
+
+.cover-address-block {
+    margin-bottom: 24pt;
+}
+
+.cover-address {
+    font-size: 20pt;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.cover-city-state {
+    font-size: 14pt;
+    font-weight: 400;
+    color: #333;
+}
+
+.cover-coords {
+    font-size: 8.5pt;
+    color: #666;
+    margin-top: 4pt;
+    font-family: "Courier New", monospace;
+}
+
+.cover-meta-grid {
+    display: table;
+    width: 100%;
+    border-top: 0.5pt solid #ddd;
+    border-bottom: 0.5pt solid #ddd;
+    padding: 10pt 0;
+    margin-bottom: 24pt;
+}
+
+.cover-meta-row {
+    display: table-row;
+}
+
+.cover-meta-label {
+    display: table-cell;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    color: #888;
+    padding: 3pt 16pt 3pt 0;
+    white-space: nowrap;
+}
+
+.cover-meta-value {
+    display: table-cell;
+    font-size: 9pt;
+    color: #1a1a1a;
+    padding: 3pt 0;
+}
+
+.map-placeholder {
+    background: #f0f0f0;
+    border: 0.5pt solid #ccc;
+    text-align: center;
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.map-placeholder-inner {
+    padding: 32pt 20pt;
+    color: #999;
+    font-size: 9pt;
+}
+
+.map-attribution {
+    font-size: 6pt;
+    color: #aaa;
+    text-align: right;
+    padding: 4pt 6pt 2pt;
+    border-top: 0.25pt solid #ddd;
+}
+
+.cover-map {
+    height: 2.2in;
+    margin-bottom: 24pt;
+}
+
+/* ── Cover Disclaimer ───────────────────────────────────────────── */
+.cover-disclaimer {
+    background: #f7f7f7;
+    border: 0.75pt solid #ccc;
+    border-left: 3pt solid #555;
+    padding: 10pt 12pt;
+    font-size: 7.5pt;
+    line-height: 1.4;
+    color: #333;
+}
+
+.cover-disclaimer strong {
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    display: block;
+    margin-bottom: 4pt;
+}
+
+/* ── Section Layout ─────────────────────────────────────────────── */
+.section {
+    page-break-before: always;
+    padding-top: 4pt;
+}
+
+.section-header {
+    border-bottom: 1.5pt solid #1a1a1a;
+    padding-bottom: 5pt;
+    margin-bottom: 14pt;
+}
+
+.section-header h2 {
+    margin-bottom: 0;
+}
+
+.section-label {
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: #888;
+    margin-bottom: 2pt;
+}
+
+/* ── Two-column layout ──────────────────────────────────────────── */
+.col-2 {
+    display: table;
+    width: 100%;
+    border-spacing: 12pt 0;
+    margin-bottom: 10pt;
+}
+
+.col-2 > .col {
+    display: table-cell;
+    width: 50%;
+    vertical-align: top;
+}
+
+/* ── Data Tables ────────────────────────────────────────────────── */
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin-bottom: 10pt;
+}
+
+table.data-table th {
+    background: #f2f2f2;
+    font-weight: 700;
+    text-align: left;
+    padding: 5pt 8pt;
+    border-bottom: 1pt solid #ccc;
+    border-top: 0.5pt solid #ccc;
+}
+
+table.data-table td {
+    padding: 4.5pt 8pt;
+    border-bottom: 0.25pt solid #e8e8e8;
+    vertical-align: top;
+}
+
+table.data-table tr:last-child td {
+    border-bottom: 0.5pt solid #ccc;
+}
+
+table.data-table tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+/* Compact climate monthly table */
+table.climate-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin-bottom: 10pt;
+}
+
+table.climate-table th {
+    background: #f2f2f2;
+    font-weight: 700;
+    text-align: center;
+    padding: 4pt 3pt;
+    border: 0.25pt solid #ddd;
+    font-size: 7.5pt;
+}
+
+table.climate-table td {
+    text-align: center;
+    padding: 3.5pt 3pt;
+    border: 0.25pt solid #eee;
+    font-size: 7.5pt;
+}
+
+table.climate-table td.row-label {
+    text-align: left;
+    font-weight: 600;
+    background: #f8f8f8;
+    padding-left: 6pt;
+    white-space: nowrap;
+}
+
+/* Solar monthly table */
+table.solar-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    margin-bottom: 10pt;
+}
+
+table.solar-table th {
+    background: #f2f2f2;
+    font-weight: 700;
+    text-align: center;
+    padding: 4pt 3pt;
+    border: 0.25pt solid #ddd;
+}
+
+table.solar-table td {
+    text-align: center;
+    padding: 3.5pt 3pt;
+    border: 0.25pt solid #eee;
+}
+
+table.solar-table td.row-label {
+    text-align: left;
+    font-weight: 600;
+    background: #f8f8f8;
+    padding-left: 6pt;
+}
+
+/* Demo flag */
+.demo-watermark {
+    text-align: center;
+    font-size: 8pt;
+    font-weight: 700;
+    color: #bbb;
+    text-transform: uppercase;
+    letter-spacing: 2pt;
+    margin-bottom: 10pt;
+}
+
+/* ── Inline Disclaimer Blocks ───────────────────────────────────── */
+.inline-disclaimer {
+    background: #f9f9f9;
+    border-left: 2pt solid #aaa;
+    padding: 5pt 9pt;
+    font-size: 7.5pt;
+    color: #444;
+    margin: 7pt 0;
+    line-height: 1.4;
+}
+
+.inline-disclaimer.warning {
+    border-left-color: #888;
+}
+
+/* ── Key-value pairs ────────────────────────────────────────────── */
+.kv-grid {
+    display: table;
+    width: 100%;
+    margin-bottom: 8pt;
+}
+
+.kv-row {
+    display: table-row;
+}
+
+.kv-label {
+    display: table-cell;
+    font-size: 7.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+    color: #666;
+    padding: 2.5pt 14pt 2.5pt 0;
+    white-space: nowrap;
+    vertical-align: top;
+    width: 1%;
+}
+
+.kv-value {
+    display: table-cell;
+    font-size: 9pt;
+    padding: 2.5pt 0;
+    vertical-align: top;
+}
+
+/* ── Flags list ─────────────────────────────────────────────────── */
+.flags-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10pt;
+}
+
+.flags-list li {
+    padding: 4pt 8pt 4pt 12pt;
+    border-bottom: 0.25pt solid #eee;
+    position: relative;
+    font-size: 8.5pt;
+}
+
+.flags-list li:first-child {
+    border-top: 0.5pt solid #ccc;
+}
+
+.flags-list li:last-child {
+    border-bottom: 0.5pt solid #ccc;
+}
+
+/* ── Section 6 demographics ─────────────────────────────────────── */
+.demo-col-3 {
+    display: table;
+    width: 100%;
+    border-spacing: 8pt 0;
+    margin-bottom: 10pt;
+}
+
+.demo-col-3 > .demo-col {
+    display: table-cell;
+    width: 33.3%;
+    vertical-align: top;
+}
+
+.demo-radius-header {
+    font-size: 9pt;
+    font-weight: 700;
+    border-bottom: 1pt solid #ccc;
+    padding-bottom: 4pt;
+    margin-bottom: 6pt;
+    color: #1a1a1a;
+}
+
+/* ── Section 7 broadband table ──────────────────────────────────── */
+.provider-table th, .provider-table td {
+    text-align: left;
+}
+
+.provider-table td.speed {
+    text-align: right;
+    font-family: "Courier New", monospace;
+    font-size: 8pt;
+}
+
+/* ── Stat callout box ───────────────────────────────────────────── */
+.stat-box {
+    display: inline-block;
+    border: 0.5pt solid #ddd;
+    padding: 8pt 12pt;
+    margin: 0 6pt 8pt 0;
+    text-align: center;
+    vertical-align: top;
+    min-width: 80pt;
+}
+
+.stat-box .stat-value {
+    font-size: 14pt;
+    font-weight: 700;
+    display: block;
+}
+
+.stat-box .stat-label {
+    font-size: 7pt;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+}
+
+/* ── Appendix ───────────────────────────────────────────────────── */
+.appendix {
+    page-break-before: always;
+}
+
+/* ── Page break helpers ─────────────────────────────────────────── */
+.page-break { page-break-after: always; }
+.avoid-break { page-break-inside: avoid; }
+
+/* ── Data unavailable state ─────────────────────────────────────── */
+.data-unavailable {
+    font-style: italic;
+    color: #777;
+    font-size: 8.5pt;
+}

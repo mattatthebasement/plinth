@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plinth Site Intelligence Report — {{ address }}, {{ city_state_zip }}</title>
+<style>
+{{ css }}
+</style>
+</head>
+<body>
+
+{# ─────────────────────────────────────────────────────────────────────────
+   COVER PAGE
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="cover">
+  <div class="cover-header">
+    <div class="cover-logo">plinth<span>report</span></div>
+    <div class="cover-tagline">Site Intelligence Platform</div>
+  </div>
+
+  <div class="demo-watermark">Demo — Illustrative Data Only</div>
+
+  <div class="cover-report-type">Site Intelligence Report</div>
+
+  <div class="cover-address-block">
+    <div class="cover-address">{{ address }}</div>
+    <div class="cover-city-state">{{ city_state_zip }}</div>
+    <div class="cover-coords">{{ "%.5f"|format(lat) }}°N, {{ "%.5f"|format(lon|abs) }}°W &nbsp;|&nbsp; {{ county }}</div>
+  </div>
+
+  <div class="cover-map map-placeholder">
+    <div class="map-placeholder-inner">
+      [Site Location Map — 1-Mile Context<br>© Mapbox © OpenStreetMap contributors]
+    </div>
+    <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+  </div>
+
+  <div class="cover-meta-grid">
+    <div class="cover-meta-row">
+      <div class="cover-meta-label">Report Date</div>
+      <div class="cover-meta-value">{{ report_date }}</div>
+    </div>
+    <div class="cover-meta-row">
+      <div class="cover-meta-label">Report ID</div>
+      <div class="cover-meta-value">
+        <span class="report-id-capture">{{ report_id }}</span>
+      </div>
+    </div>
+    <div class="cover-meta-row">
+      <div class="cover-meta-label">Prepared For</div>
+      <div class="cover-meta-value">{{ prepared_for }}</div>
+    </div>
+    <div class="cover-meta-row">
+      <div class="cover-meta-label">IECC Climate Zone</div>
+      <div class="cover-meta-value">Zone {{ iecc_zone }} — {{ iecc_description }}</div>
+    </div>
+  </div>
+
+  <div class="cover-disclaimer">
+    <strong>Important — Please Read</strong>
+    This report aggregates publicly available data for informational purposes only.
+    It is not an engineering study, environmental assessment, appraisal, flood insurance
+    determination, or legal opinion. Data values are sourced from federal and state agencies
+    and are presented without interpretation, rating, or recommendation. Site-specific
+    conditions may differ materially from the values shown. This report does not evaluate
+    the suitability of the subject site for any particular use. Always engage qualified
+    licensed professionals — including engineers, surveyors, environmental consultants, and
+    legal counsel — before making development, investment, or financing decisions.
+    The operator of this service assumes no liability for errors, omissions, or
+    reliance on report contents. See Section 8 and the Methodology Appendix for data
+    sources, vintages, and known limitations.
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 1 — EXECUTIVE SUMMARY
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 1</div>
+    <h2>Executive Summary</h2>
+  </div>
+
+  <div class="col-2">
+    <div class="col">
+      <h3>Site Identification</h3>
+      <div class="kv-grid">
+        <div class="kv-row">
+          <div class="kv-label">Address</div>
+          <div class="kv-value">{{ address }}<br>{{ city_state_zip }}</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-label">County</div>
+          <div class="kv-value">{{ county }}</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-label">Coordinates</div>
+          <div class="kv-value">{{ "%.5f"|format(lat) }}°N, {{ "%.5f"|format(lon|abs) }}°W</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-label">IECC Zone</div>
+          <div class="kv-value">Zone {{ iecc_zone }} — {{ iecc_description }}</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-label">Pop. (5 mi)</div>
+          <div class="kv-value">{{ population_5mi }} (est.)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Key Observations</h3>
+      <ul class="flags-list">
+        {% for flag in exec_flags %}
+        <li>{{ flag }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <h3>Risk &amp; Context Summary</h3>
+  <p style="font-size:7.5pt;color:#666;margin-bottom:6pt;">
+    Tabular data summary. Values presented as reported by source datasets without modification.
+    No risk rating, scoring, or suitability determination is made by this report.
+  </p>
+  <table class="data-table avoid-break">
+    <thead>
+      <tr>
+        <th style="width:28%">Category</th>
+        <th style="width:44%">Reported Value</th>
+        <th style="width:28%">Source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in risk_summary %}
+      <tr>
+        <td>{{ row.category }}</td>
+        <td>{{ row.value }}</td>
+        <td style="font-size:7.5pt;color:#666;">{{ row.source }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 2 — ENVIRONMENTAL RISK
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 2</div>
+    <h2>Environmental Risk</h2>
+  </div>
+
+  {# Flood Risk #}
+  <div class="avoid-break">
+    <h3>Flood Risk — FEMA National Flood Hazard Layer</h3>
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">Flood Zone</div>
+        <div class="kv-value"><strong>Zone {{ flood.zone }}</strong> — {{ flood.subtype }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">SFHA (100-yr)</div>
+        <div class="kv-value">
+          {% if flood.sfha %}Yes — within Special Flood Hazard Area{% else %}No — not within Special Flood Hazard Area per NFHL{% endif %}
+        </div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Base Flood Elev.</div>
+        <div class="kv-value">
+          {% if flood.bfe_ft %}{{ flood.bfe_ft }} ft NAVD88{% else %}Not assigned for Zone X{% endif %}
+        </div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">NFHL Date</div>
+        <div class="kv-value">{{ flood.nfhl_date }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Mapped Area</div>
+        <div class="kv-value">{% if flood.mapped %}Yes — FEMA flood mapping available for this area{% else %}No — this area has not been mapped by FEMA. Zone designation unknown. Do not assume Zone X.{% endif %}</div>
+      </div>
+    </div>
+    <div class="inline-disclaimer">
+      FEMA flood zone status reflects the NFHL map effective {{ flood.nfhl_date }}. Map amendments (LOMA/LOMR),
+      remapping projects, or local ordinance changes may affect current status. Verify current FIRM panel
+      and insurance requirements with your lender, local floodplain administrator, and a licensed flood
+      specialist before relying on this data. Approximately 15–20% of the US has not been mapped by FEMA —
+      unmapped areas are explicitly noted in this report and must never be assumed to be Zone X.
+      See FIRMette (msc.fema.gov) for the authoritative current map.
+    </div>
+  </div>
+
+  {# Seismic Risk #}
+  <div class="avoid-break">
+    <h3>Seismic Risk — USGS NEHRP 2020 Seismic Hazard Maps</h3>
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">PGA (MCEᵣ, 2%/50yr)</div>
+        <div class="kv-value">{{ seismic.pgam_g }}g</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Sₛ (0.2s spectral)</div>
+        <div class="kv-value">{{ seismic.ss_g }}g</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">S₁ (1.0s spectral)</div>
+        <div class="kv-value">{{ seismic.s1_g }}g</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Historical EQ Activity</div>
+        <div class="kv-value">
+          {{ seismic.eq_count }} event{% if seismic.eq_count != 1 %}s{% endif %} ≥M3.0
+          within {{ seismic.eq_radius_mi }} mi, last {{ seismic.eq_years }} years.
+          Max magnitude: M{{ seismic.eq_max_mag }}.
+        </div>
+      </div>
+    </div>
+    <div class="inline-disclaimer">
+      Seismic Design Category (SDC) is an engineering determination per ASCE 7 and
+      requires a licensed structural engineer. Hazard values are probabilistic estimates
+      from the USGS national hazard model and do not constitute a site-specific
+      geotechnical evaluation. Source: USGS NEHRP 2020 Seismic Hazard Maps.
+    </div>
+  </div>
+
+  {# Wildfire #}
+  <div class="avoid-break">
+    <h3>Wildfire Hazard Potential — USDA Forest Service</h3>
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">WHP Value</div>
+        <div class="kv-value">{{ wildfire.whp_value }} (national max: {{ wildfire.whp_national_max }})</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Data Vintage</div>
+        <div class="kv-value">{{ wildfire.vintage }} ({{ wildfire.resolution_m }}m resolution)</div>
+      </div>
+    </div>
+    <div class="inline-disclaimer">
+      USDA Forest Service Wildfire Hazard Potential is a modeled index, not a regulatory
+      classification. WUI status and local fire hazard severity zones may impose additional
+      requirements. Consult your local fire authority and AHJ. Source and methodology:
+      USDA Forest Service Fire Modeling Institute, {{ wildfire.vintage }}.
+    </div>
+  </div>
+
+  {# Soil Profile #}
+  <div class="avoid-break">
+    <h3>Soil Profile — USDA SSURGO</h3>
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">Map Unit</div>
+        <div class="kv-value">{{ soil.muname }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Hydrologic Group</div>
+        <div class="kv-value">{{ soil.hydrologic_group }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Drainage Class</div>
+        <div class="kv-value">{{ soil.drainage_class }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Dominant Component</div>
+        <div class="kv-value">{{ soil.dominant_component }} ({{ soil.dominant_component_pct }}%)</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Taxonomic Class</div>
+        <div class="kv-value" style="font-style:italic;">{{ soil.taxonomic_class }}</div>
+      </div>
+      {% if soil.nearest_fallback %}
+      <div class="kv-row">
+        <div class="kv-label">Note</div>
+        <div class="kv-value">Nearest mapped unit returned — site may be in an unmapped area (e.g., active floodplain). Verify with USDA Web Soil Survey.</div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="inline-disclaimer">
+      Soil data is presented as raw USDA SSURGO taxonomy. No foundation suitability,
+      bearing capacity, or construction assessment is made or implied by this report.
+      Consult a licensed geotechnical engineer for foundation design and site-specific
+      soil investigation. Source: USDA NRCS SSURGO database.
+    </div>
+  </div>
+
+  {# Air Quality #}
+  <div class="avoid-break">
+    <h3>Air Quality — EPA Air Quality System (AQS)</h3>
+    {% if air_quality.available %}
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">PM₂.₅ Annual</div>
+        <div class="kv-value">{{ air_quality.pm25_annual }} µg/m³ (NAAQS annual standard: 9.0 µg/m³)</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Ozone DV</div>
+        <div class="kv-value">{{ air_quality.ozone_ppb }} ppb</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Monitor</div>
+        <div class="kv-value">{{ air_quality.monitor_name }}, {{ air_quality.monitor_distance_mi }} mi</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">Data Year</div>
+        <div class="kv-value">{{ air_quality.year }}</div>
+      </div>
+    </div>
+    {% else %}
+    <p class="data-unavailable">{{ air_quality.flag }}</p>
+    {% endif %}
+    <div class="inline-disclaimer">
+      EPA AQS data typically lags 6–18 months from current conditions and is measured at fixed
+      monitoring stations that may not reflect site-level air quality. This is not a real-time
+      air quality index. No health assessment is made or implied. Source: EPA Air Quality System.
+    </div>
+  </div>
+
+  {# FEMA NRI #}
+  <div class="avoid-break">
+    <h3>FEMA National Risk Index — Composite Hazard Risk Score</h3>
+    <div class="inline-disclaimer warning" style="margin-bottom:8pt;">
+      <strong>Attribution required by source:</strong>
+      The values below are produced by FEMA's National Risk Index model — a composite
+      score developed and published by FEMA. This is FEMA's model output, not a rating
+      derived by Plinth. See <em>fema.gov/nri</em> for full methodology.
+      Source: FEMA National Risk Index.
+    </div>
+    <div class="kv-grid">
+      <div class="kv-row">
+        <div class="kv-label">Census Tract</div>
+        <div class="kv-value">{{ fema_nri.tract_id }}</div>
+      </div>
+      <div class="kv-row">
+        <div class="kv-label">NRI Risk Score</div>
+        <div class="kv-value">{{ fema_nri.risk_score }} — {{ fema_nri.risk_ratng }}</div>
+      </div>
+    </div>
+    <h4>Hazard Component Scores (FEMA NRI)</h4>
+    <table class="data-table avoid-break">
+      <thead>
+        <tr>
+          <th>Hazard</th>
+          <th style="text-align:right;">FEMA NRI Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for hazard, score in fema_nri.hazards.items() %}
+        <tr>
+          <td>{{ hazard }}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;">{{ "%.1f"|format(score) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 3 — PHYSICAL CONTEXT
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 3</div>
+    <h2>Physical Context</h2>
+  </div>
+
+  <div class="col-2">
+    <div class="col">
+      {# Elevation #}
+      <div class="avoid-break">
+        <h3>Elevation — USGS 3DEP (10m)</h3>
+        <div class="kv-grid">
+          <div class="kv-row">
+            <div class="kv-label">Site Elevation</div>
+            <div class="kv-value">
+              <strong>{{ "%.1f"|format(elevation.elevation_ft) }} ft</strong>
+              ({{ "%.1f"|format(elevation.elevation_m) }} m)
+            </div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">DEM Resolution</div>
+            <div class="kv-value">{{ elevation.resolution_m }}m (1/3 arc-second)</div>
+          </div>
+        </div>
+      </div>
+
+      {# Slope #}
+      <div class="avoid-break">
+        <h3>Slope — USGS 3DEP Derived</h3>
+        <div class="kv-grid">
+          <div class="kv-row">
+            <div class="kv-label">Mean Slope</div>
+            <div class="kv-value"><strong>{{ "%.1f"|format(slope.mean_slope_pct) }}%</strong></div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">Max Slope</div>
+            <div class="kv-value">{{ "%.1f"|format(slope.max_slope_pct) }}%</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">Radius</div>
+            <div class="kv-value">{{ slope.radius_m }}m</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">Reference Bands</div>
+            <div class="kv-value">0–5% / 5–15% / &gt;15%</div>
+          </div>
+        </div>
+        <div class="inline-disclaimer">
+          {% if slope.max_slope_pct > 15 %}
+          Slope exceeds 15% — consult a licensed civil engineer regarding grading and drainage requirements.
+          {% else %}
+          Slope values are DEM-derived estimates ({{ slope.radius_m }}m radius). Site-specific grading
+          conditions should be confirmed by a licensed surveyor or civil engineer.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="map-placeholder" style="height:3.2in;">
+        <div class="map-placeholder-inner">
+          [Terrain / Hillshade Map<br>1-Mile Radius<br>Scale bar · North arrow<br>© Mapbox © OpenStreetMap contributors]
+        </div>
+        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+      </div>
+    </div>
+  </div>
+
+  {# Land Cover #}
+  <div class="avoid-break">
+    <h3>Land Cover — USGS NLCD 2021 ({{ land_cover.radius_m }}m radius)</h3>
+    <div class="col-2">
+      <div class="col">
+        <div class="kv-grid">
+          <div class="kv-row">
+            <div class="kv-label">Dominant Class</div>
+            <div class="kv-value"><strong>{{ land_cover.dominant_class }}</strong></div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">NLCD Code</div>
+            <div class="kv-value">{{ land_cover.dominant_class_code }}</div>
+          </div>
+          <div class="kv-row">
+            <div class="kv-label">Impervious Surface</div>
+            <div class="kv-value">{{ "%.1f"|format(land_cover.impervious_pct_estimate) }}% (estimated)</div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Land Cover Class</th>
+              <th style="text-align:right;">% of Radius</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lc in land_cover.distribution %}
+            <tr>
+              <td>{{ lc.class }}</td>
+              <td style="text-align:right;font-family:'Courier New',monospace;">{{ "%.1f"|format(lc.pct) }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Hydrography #}
+  <div class="avoid-break">
+    <h3>Hydrography — NHDPlus High Resolution</h3>
+    <div class="kv-grid">
+      {% if hydro.waterbody %}
+      <div class="kv-row">
+        <div class="kv-label">Nearest Waterbody</div>
+        <div class="kv-value">
+          {{ hydro.waterbody.name }} ({{ hydro.waterbody.type }}) —
+          {{ "%.2f"|format(hydro.waterbody.distance_mi) }} mi
+        </div>
+      </div>
+      {% endif %}
+      {% if hydro.flowline %}
+      <div class="kv-row">
+        <div class="kv-label">Nearest Flowline</div>
+        <div class="kv-value">
+          {{ hydro.flowline.name }} ({{ hydro.flowline.type }}) —
+          {{ "%.2f"|format(hydro.flowline.distance_mi) }} mi
+        </div>
+      </div>
+      {% endif %}
+      <div class="kv-row">
+        <div class="kv-label">Search Radius</div>
+        <div class="kv-value">{{ hydro.search_radius_mi }} miles</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 4 — CLIMATE & WEATHER
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 4</div>
+    <h2>Climate &amp; Weather</h2>
+  </div>
+
+  <div class="kv-grid" style="margin-bottom:10pt;">
+    <div class="kv-row">
+      <div class="kv-label">Climate Station</div>
+      <div class="kv-value">{{ climate.station_name }} ({{ climate.station_id }})</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Distance from Site</div>
+      <div class="kv-value">{{ climate.distance_mi }} miles
+        {% if climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi; values may not reflect site microclimate</em>{% endif %}
+      </div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Normals Period</div>
+      <div class="kv-value">NOAA {{ climate.period }} Climate Normals</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">IECC Zone</div>
+      <div class="kv-value">Zone {{ iecc_zone }} — {{ iecc_description }}. {{ iecc_note }}</div>
+    </div>
+  </div>
+
+  <div>
+    <span class="stat-box">
+      <span class="stat-value">{{ climate.hdd_annual }}</span>
+      <span class="stat-label">HDD Annual</span>
+    </span>
+    <span class="stat-box">
+      <span class="stat-value">{{ climate.cdd_annual }}</span>
+      <span class="stat-label">CDD Annual</span>
+    </span>
+    <span class="stat-box">
+      <span class="stat-value">{{ climate.rh_annual_pct }}%</span>
+      <span class="stat-label">Avg Rel. Humidity</span>
+    </span>
+    <span class="stat-box">
+      <span class="stat-value">{{ climate.freeze_thaw_days }}</span>
+      <span class="stat-label">Freeze-Thaw Days</span>
+    </span>
+  </div>
+
+  <h3>Monthly Climate Normals ({{ climate.period }})</h3>
+  <table class="climate-table avoid-break">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding-left:6pt;">Metric</th>
+        {% for m in climate.months %}<th>{{ m }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="row-label">Max Temp (°F)</td>
+        {% for v in climate.tmax_f %}<td>{{ "%.0f"|format(v) }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td class="row-label">Min Temp (°F)</td>
+        {% for v in climate.tmin_f %}<td>{{ "%.0f"|format(v) }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td class="row-label">Precip (in)</td>
+        {% for v in climate.prcp_in %}<td>{{ "%.2f"|format(v) }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td class="row-label">Snowfall (in)</td>
+        {% for v in climate.snow_in %}<td>{{ "%.1f"|format(v) }}</td>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="inline-disclaimer">
+    Climate values are NOAA 1991–2020 climate normals measured at {{ climate.station_name }},
+    {{ climate.distance_mi }} miles from the site. Station-based normals may not reflect
+    site-level microclimatic variation due to local topography, urban heat island effects,
+    or distance from station. Source: NOAA National Centers for Environmental Information.
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 5 — SOLAR
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 5</div>
+    <h2>Solar Resource</h2>
+  </div>
+
+  <div class="col-2">
+    <div class="col">
+      <div class="kv-grid">
+        <div class="kv-row">
+          <div class="kv-label">Annual Avg GHI</div>
+          <div class="kv-value"><strong>{{ solar.peak_sun_hours }} kWh/m²/day</strong> peak sun hours</div>
+        </div>
+        <div class="kv-row">
+          <div class="kv-label">Latitude</div>
+          <div class="kv-value">{{ solar.latitude }}°N</div>
+        </div>
+      </div>
+
+      <h3>Monthly Solar Resource (GHI, kWh/m²/day)</h3>
+      <table class="solar-table avoid-break">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding-left:6pt;">Metric</th>
+            {% for m in solar.months %}<th>{{ m }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="row-label">GHI</td>
+            {% for v in solar.ghi_monthly %}<td>{{ "%.2f"|format(v) }}</td>{% endfor %}
+          </tr>
+          <tr>
+            <td class="row-label">Sunrise</td>
+            {% for v in solar.sunrise %}<td>{{ v }}</td>{% endfor %}
+          </tr>
+          <tr>
+            <td class="row-label">Sunset</td>
+            {% for v in solar.sunset %}<td>{{ v }}</td>{% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="col">
+      <div class="map-placeholder" style="height:2.8in;">
+        <div class="map-placeholder-inner">
+          [Solar Resource Map<br>Annual GHI Raster<br>© Mapbox © OpenStreetMap contributors]
+        </div>
+        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="inline-disclaimer">
+    Solar resource values are long-term climatological averages (NASA POWER, 2001–2020)
+    at the grid cell containing this location (≈0.5° resolution). They represent
+    horizontal surface irradiance and do not account for shading, panel tilt,
+    azimuth, or system losses. No energy production estimate is made or implied.
+    Source: NASA POWER (power.larc.nasa.gov), accessed {{ report_date }}.
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 6 — DEMOGRAPHICS
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 6</div>
+    <h2>Demographic &amp; Market Context</h2>
+  </div>
+
+  <p style="font-size:8pt;color:#444;margin-bottom:10pt;">
+    {{ demographics.note }}
+    Source: {{ demographics.acs_vintage }}.
+  </p>
+
+  <div class="demo-col-3">
+    {% for r in demographics.radii %}
+    <div class="demo-col">
+      <div class="demo-radius-header">{{ r.label }}</div>
+      <table class="data-table">
+        <tbody>
+          <tr><td>Population</td><td style="text-align:right;">{{ "{:,}".format(r.population) }}</td></tr>
+          <tr><td>Households</td><td style="text-align:right;">{{ "{:,}".format(r.households) }}</td></tr>
+          <tr><td>Median HHI</td><td style="text-align:right;">{{ r.median_hhi }}</td></tr>
+          <tr><td>Median Age</td><td style="text-align:right;">{{ r.median_age }}</td></tr>
+          <tr><td>Owner Occupied</td><td style="text-align:right;">{{ r.pct_owner_occupied }}</td></tr>
+          <tr><td>Bach. Degree+</td><td style="text-align:right;">{{ r.pct_bachelor_plus }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="inline-disclaimer">
+    Demographic values are area-weighted estimates derived from Census block groups
+    intersecting straight-line radius buffers. Physical barriers (rivers, highways, etc.)
+    are not accounted for. Population counts may differ from administrative area totals.
+    Radius buffers use geodesic measurement. All values are estimates with associated
+    margins of error per ACS methodology — consult source tables for confidence intervals.
+    These data are presented for general context only and must not be used as a substitute
+    for a formal market study or demographic analysis. Source: {{ demographics.acs_vintage }}.
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 7 — INFRASTRUCTURE & ACCESS
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 7</div>
+    <h2>Infrastructure &amp; Access</h2>
+  </div>
+
+  <h3>Broadband Availability — FCC National Broadband Map</h3>
+
+  <div class="inline-disclaimer warning" style="margin-bottom:8pt;">
+    <strong>Required disclosure:</strong>
+    FCC broadband data is self-reported by internet service providers and may
+    significantly overstate actual service coverage and speeds at any given location.
+    Treat these values as indicative only. Verify broadband availability and tier
+    directly with each listed service provider before relying on this data for
+    site selection, feasibility analysis, or development planning.
+    Source: FCC National Broadband Map, deployment data.
+  </div>
+
+  <table class="data-table provider-table avoid-break">
+    <thead>
+      <tr>
+        <th>Provider</th>
+        <th>Technology</th>
+        <th style="text-align:right;">Max Down (Mbps)</th>
+        <th style="text-align:right;">Max Up (Mbps)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in infrastructure.broadband %}
+      <tr>
+        <td>{{ p.provider }}</td>
+        <td>{{ p.technology }}</td>
+        <td class="speed">{{ p.max_down_mbps }}</td>
+        <td class="speed">{{ p.max_up_mbps }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Road &amp; Transportation Access</h3>
+  <p>{{ infrastructure.road_note }}</p>
+  <p>{{ infrastructure.transit_note }}</p>
+
+  <h3>Water &amp; Sewer</h3>
+  <div class="inline-disclaimer">
+    {{ infrastructure.water_sewer_note }}
+    No authoritative national data source for municipal water/sewer service area boundaries
+    is currently available in this platform.
+  </div>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   SECTION 8 — DATA SOURCES & METHODOLOGY
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="section">
+  <div class="section-header">
+    <div class="section-label">Section 8</div>
+    <h2>Data Sources &amp; Methodology</h2>
+  </div>
+
+  <div class="kv-grid" style="margin-bottom:10pt;">
+    <div class="kv-row">
+      <div class="kv-label">Report Generated</div>
+      <div class="kv-value">{{ report_date }}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Report ID</div>
+      <div class="kv-value">{{ report_id }}</div>
+    </div>
+  </div>
+
+  <table class="data-table avoid-break">
+    <thead>
+      <tr>
+        <th style="width:40%">Data Source</th>
+        <th style="width:15%">Version / Date</th>
+        <th style="width:20%">Refresh Cadence</th>
+        <th style="width:25%">Storage</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td>{{ s.name }}</td>
+        <td style="font-size:8pt;font-family:'Courier New',monospace;">{{ s.version }}</td>
+        <td style="font-size:8pt;">{{ s.refresh }}</td>
+        <td style="font-size:8pt;color:#666;">{{ s.storage }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+{# ─────────────────────────────────────────────────────────────────────────
+   APPENDIX — ABOUT THIS REPORT
+   ───────────────────────────────────────────────────────────────────────── #}
+<div class="appendix">
+  <div class="section-header">
+    <div class="section-label">Appendix</div>
+    <h2>About This Report</h2>
+  </div>
+
+  <h3>What Plinth Is</h3>
+  <p>
+    Plinth is a site intelligence platform that aggregates publicly available federal and
+    state datasets into a single, structured PDF report for a given US address. Reports are
+    generated on demand and are intended to provide an organized starting point for
+    predevelopment due diligence.
+  </p>
+
+  <h3>What This Report Is Not</h3>
+  <p>
+    This report is not an engineering study, Phase I or Phase II environmental site assessment,
+    appraisal, wetlands delineation, title report, flood insurance determination, air quality
+    permit review, geotechnical investigation, or legal opinion. Nothing in this report
+    constitutes professional engineering, surveying, environmental, or legal advice.
+    All interpretations, determinations, and recommendations regarding site suitability,
+    development feasibility, risk management, or regulatory compliance require engagement
+    of appropriately licensed professionals.
+  </p>
+
+  <h3>Data Accuracy &amp; Limitations</h3>
+  <p>
+    All data values are sourced directly from the cited federal or state datasets and are
+    presented without modification or interpretation. Known limitations of each dataset
+    are described inline in the relevant report section. Dataset vintages vary; see
+    Section 8 for effective dates and retrieval timestamps. Plinth does not verify
+    real-time accuracy of source data.
+  </p>
+
+  <h3>No Risk Rating System</h3>
+  <p>
+    This report does not employ any color-coded risk rating, composite suitability score,
+    or editorial judgment about site quality. All values are raw source data.
+    FEMA National Risk Index scores are reproduced verbatim from FEMA's published model
+    and are explicitly attributed to FEMA (see Section 2).
+  </p>
+
+  <h3>Regulatory Compliance Note</h3>
+  <p>
+    This report does not include individual-level consumer information and is not subject
+    to the Fair Credit Reporting Act (FCRA). Reports are provided to business customers
+    for commercial real estate due diligence purposes. Users are responsible for
+    compliance with all applicable laws in their jurisdiction.
+  </p>
+
+  <h3>Report Retention</h3>
+  <p>
+    A snapshot of data source versions in effect at generation time is archived with
+    this report's unique ID ({{ report_id }}). Archived reports represent conditions
+    as of the report generation date and are not updated after delivery.
+  </p>
+
+  <div style="margin-top:24pt;padding:12pt;border:0.5pt solid #ddd;text-align:center;font-size:8pt;color:#666;">
+    <p style="margin:0 0 4pt;"><strong>Plinth Site Intelligence</strong></p>
+    <p style="margin:0;">site-intelligence.com &nbsp;·&nbsp; Report ID: {{ report_id }}</p>
+    <p style="margin:4pt 0 0;font-size:7pt;">
+      This is a demonstration report. All values are illustrative. Do not rely on this report
+      for any purpose.
+    </p>
+  </div>
+</div>
+
+</body>
+</html>
