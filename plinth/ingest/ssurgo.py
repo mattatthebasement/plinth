@@ -158,6 +158,17 @@ class SsurgoIngestor(BaseIngestor):
         if first:
             raise RuntimeError("WFS load failed for all survey areas.")
 
+        # WFS 1.1.0 with EPSG:4326 returns coordinates in latitude/longitude
+        # order. ogr2ogr preserves that order (X=lat, Y=lon), which is the
+        # reverse of the PostGIS convention (X=lon, Y=lat). Flip to correct.
+        self._log("Flipping WFS coordinate axes to lon/lat (WFS 1.1.0 axis-order fix)…")
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE _staging_ssurgo_wfs SET geom = ST_FlipCoordinates(geom)"
+                )
+            conn.commit()
+
     def _fetch_components_via_sdm(self, areas: list[str]) -> None:
         """Query SDM Tabular for component data and cache as JSON."""
         import httpx
