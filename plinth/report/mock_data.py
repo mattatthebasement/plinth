@@ -90,8 +90,8 @@ MOCK_CONTEXT = {
 
     # ── Section 3 — Physical Context ─────────────────────────────────────
     "elevation": {
-        "elevation_m": 211.0,
-        "elevation_ft": 692.3,
+        "elevation_m": 211.35,
+        "elevation_ft": 693.4,
         "resolution_m": 10.0,
     },
     "slope": {
