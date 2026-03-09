@@ -1,51 +1,108 @@
 from __future__ import annotations
 
+import string
 import sys
+import urllib.parse
 from pathlib import Path
 
 import click
+import httpx
 
 from plinth.report.render import render_report_pdf
 from plinth.report.mock_data import MOCK_CONTEXT
 
 
-def _geocode(address: str) -> tuple[float, float, str, str, str]:
-    """
-    Geocode an address using Mapbox Geocoding API.
+def _title_case(s: str) -> str:
+    """Title-case a string, preserving common abbreviations like 'OK', 'NE', 'NW'."""
+    return string.capwords(s)
 
-    Returns (lat, lon, formatted_address, city_state_zip, county).
-    Raises RuntimeError if geocoding fails.
+
+def _geocode_census(address: str) -> tuple[float, float, str, str, str] | None:
     """
-    import httpx
+    Geocode via US Census Bureau Geocoder (no API key required).
+
+    Uses the /geographies endpoint to get county name in one call.
+    Returns (lat, lon, street_address, city_state_zip, county) or None on failure.
+    """
+    encoded = urllib.parse.quote(address)
+    url = (
+        "https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress"
+        f"?address={encoded}&benchmark=Public_AR_Current&vintage=Current_Current&format=json"
+    )
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        return None
+
+    matches = data.get("result", {}).get("addressMatches", [])
+    if not matches:
+        return None
+
+    match = matches[0]
+    coords = match["coordinates"]
+    lat, lon = float(coords["y"]), float(coords["x"])
+
+    # matched address is ALL CAPS, e.g. "11822 E 116TH ST N, COLLINSVILLE, OK, 74021"
+    matched = _title_case(match.get("matchedAddress", address))
+
+    # Split: "11822 E 116th St N, Collinsville, Ok, 74021"
+    # Census format: STREET, CITY, STATE, ZIP  (4 comma-separated parts)
+    parts = [p.strip() for p in matched.split(",")]
+    street = parts[0] if parts else matched
+
+    if len(parts) >= 4:
+        city = parts[1].strip()
+        state = parts[2].strip().upper()  # restore state to uppercase abbreviation
+        zip_code = parts[3].strip()
+        city_state_zip = f"{city}, {state} {zip_code}"
+    elif len(parts) == 3:
+        city_state_zip = f"{parts[1].strip()}, {parts[2].strip().upper()}"
+    else:
+        city_state_zip = ""
+
+    # County name from geographies response
+    geos = match.get("geographies", {})
+    counties = geos.get("Counties", [])
+    county = _title_case(counties[0].get("NAME", "")) if counties else ""
+
+    return lat, lon, street, city_state_zip, county
+
+
+def _geocode_mapbox(address: str) -> tuple[float, float, str, str, str] | None:
+    """
+    Geocode via Mapbox Geocoding API (fallback). Requires MAPBOX_TOKEN.
+
+    Returns (lat, lon, street_address, city_state_zip, county) or None on failure.
+    """
     from plinth.config import get_settings
-
     token = get_settings().mapbox_token
     if not token:
-        raise RuntimeError(
-            "MAPBOX_TOKEN is not configured. Set it in .env to use live geocoding."
-        )
+        return None
 
-    import urllib.parse
     encoded = urllib.parse.quote(address)
     url = (
         f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded}.json"
         f"?country=us&types=address&access_token={token}"
     )
-
-    with httpx.Client(timeout=15.0) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        return None
 
     features = data.get("features", [])
     if not features:
-        raise RuntimeError(f"No geocoding results found for: {address!r}")
+        return None
 
     feature = features[0]
     lon, lat = feature["center"]
-    place_name = feature.get("place_name", address)
 
-    # Parse context array for city/state/zip and county
+    # Parse context array for city/state/zip/county
     ctx_map: dict[str, str] = {}
     for ctx in feature.get("context", []):
         ctx_id = ctx.get("id", "")
@@ -58,13 +115,40 @@ def _geocode(address: str) -> tuple[float, float, str, str, str]:
         elif ctx_id.startswith("district"):
             ctx_map["district"] = ctx.get("text", "")
 
+    # Street address only (first part of place_name before the city)
+    place_name = feature.get("place_name", "")
+    street = place_name.split(",")[0].strip() if "," in place_name else place_name
+
     city = ctx_map.get("place", "")
     state = ctx_map.get("region", "")
     zip_code = ctx_map.get("postcode", "")
     county = ctx_map.get("district", "")
-
     city_state_zip = ", ".join(filter(None, [city, f"{state} {zip_code}".strip()]))
-    return lat, lon, place_name, city_state_zip, county
+
+    return lat, lon, street, city_state_zip, county
+
+
+def _geocode(address: str) -> tuple[float, float, str, str, str]:
+    """
+    Geocode an address. Tries US Census Geocoder first (no API key, accurate for US),
+    then falls back to Mapbox.
+
+    Returns (lat, lon, street_address, city_state_zip, county).
+    Raises RuntimeError if all methods fail.
+    """
+    result = _geocode_census(address)
+    if result:
+        return result
+
+    click.echo("  Census geocoder unavailable — trying Mapbox fallback…", err=True)
+    result = _geocode_mapbox(address)
+    if result:
+        return result
+
+    raise RuntimeError(
+        f"Could not geocode address: {address!r}\n"
+        "Census Geocoder and Mapbox both failed. Check your address and network."
+    )
 
 
 @click.group()
