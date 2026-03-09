@@ -454,6 +454,56 @@ table.solar-table td.row-label {
     font-size: 8pt;
 }
 
+/* ── Score context boxes ────────────────────────────────────────── */
+.score-context {
+    background: #f5f5f5;
+    border: 0.5pt solid #ddd;
+    border-left: 2pt solid #888;
+    padding: 7pt 10pt;
+    font-size: 7.5pt;
+    color: #333;
+    margin: 7pt 0;
+    line-height: 1.45;
+}
+
+.score-context-title {
+    font-weight: 700;
+    font-size: 8pt;
+    margin-bottom: 4pt;
+    color: #1a1a1a;
+}
+
+table.score-range-table {
+    width: auto;
+    border-collapse: collapse;
+    font-size: 7.5pt;
+    margin: 5pt 0 5pt 4pt;
+}
+
+table.score-range-table th {
+    background: #e8e8e8;
+    font-weight: 700;
+    text-align: left;
+    padding: 3pt 10pt 3pt 6pt;
+    border: 0.25pt solid #ccc;
+}
+
+table.score-range-table td {
+    padding: 2.5pt 10pt 2.5pt 6pt;
+    border: 0.25pt solid #ddd;
+    font-family: "Courier New", monospace;
+}
+
+table.score-range-table td:last-child {
+    font-family: inherit;
+}
+
+/* ── Link styling for PDF ───────────────────────────────────────── */
+a {
+    color: #1a5490;
+    text-decoration: underline;
+}
+
 /* ── Section 6 demographics merged table ────────────────────────── */
 table.demo-merged-table tr.demo-group-heading td {
     background: #e8e8e8;

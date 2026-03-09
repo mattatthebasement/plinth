@@ -47,6 +47,7 @@ MOCK_CONTEXT = {
         "pgam_g": 0.047,
         "ss_g": 0.112,
         "s1_g": 0.044,
+        "pga_class": "Very Low",
         "eq_count": 4,
         "eq_max_mag": 4.2,
         "eq_years": 50,
@@ -55,6 +56,7 @@ MOCK_CONTEXT = {
     "wildfire": {
         "whp_value": 1240,
         "whp_national_max": 144153,
+        "whp_class": "Low",
         "vintage": "2023",
         "resolution_m": 270,
     },

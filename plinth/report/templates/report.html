@@ -189,7 +189,7 @@
       and insurance requirements with your lender, local floodplain administrator, and a licensed flood
       specialist before relying on this data. Approximately 15–20% of the US has not been mapped by FEMA —
       unmapped areas are explicitly noted in this report and must never be assumed to be Zone X.
-      See FIRMette (msc.fema.gov) for the authoritative current map.
+      See FIRMette (<a href="https://msc.fema.gov/portal/home">https://msc.fema.gov</a>) for the authoritative current map.
     </div>
   </div>
 
@@ -199,7 +199,7 @@
     <div class="kv-grid">
       <div class="kv-row">
         <div class="kv-label">PGA (MCEᵣ, 2%/50yr)</div>
-        <div class="kv-value">{{ seismic.pgam_g }}g</div>
+        <div class="kv-value"><strong>{{ seismic.pgam_g }}g — {{ seismic.pga_class }}</strong></div>
       </div>
       <div class="kv-row">
         <div class="kv-label">Sₛ (0.2s spectral)</div>
@@ -218,11 +218,30 @@
         </div>
       </div>
     </div>
+    <div class="score-context">
+      <div class="score-context-title">About Peak Ground Acceleration (PGA)</div>
+      PGA is the maximum expected ground acceleration at a site, expressed as a fraction
+      of gravitational acceleration (g). It reflects a 2% probability of exceedance in
+      50 years (the MCEᵣ level used in building codes). National range and general hazard tiers:
+      <table class="score-range-table">
+        <tr><th>PGA Range</th><th>General Hazard Level</th><th>Typical Regions</th></tr>
+        <tr><td>&lt; 0.05g</td><td>Very Low</td><td>Central &amp; eastern plains, much of the South</td></tr>
+        <tr><td>0.05 – 0.15g</td><td>Low</td><td>Midwest, mid-Atlantic, parts of the Southeast</td></tr>
+        <tr><td>0.15 – 0.30g</td><td>Moderate</td><td>Central US, Intermountain West</td></tr>
+        <tr><td>0.30 – 0.60g</td><td>High</td><td>Pacific Northwest, parts of Utah/Nevada</td></tr>
+        <tr><td>&gt; 0.60g</td><td>Very High</td><td>Coastal California, Cascadia subduction zone</td></tr>
+      </table>
+      These tiers are general context only and do not constitute a seismic design classification.
+      Seismic Design Category (SDC) per ASCE 7 requires a licensed structural engineer.
+      For interactive maps and full methodology, see
+      <a href="https://earthquake.usgs.gov/hazards/">https://earthquake.usgs.gov/hazards/</a>.
+    </div>
     <div class="inline-disclaimer">
       Seismic Design Category (SDC) is an engineering determination per ASCE 7 and
       requires a licensed structural engineer. Hazard values are probabilistic estimates
       from the USGS national hazard model and do not constitute a site-specific
-      geotechnical evaluation. Source: USGS NEHRP 2020 Seismic Hazard Maps.
+      geotechnical evaluation. Source:
+      <a href="https://earthquake.usgs.gov/hazards/hazmaps/">USGS NEHRP 2020 Seismic Hazard Maps</a>.
     </div>
   </div>
 
@@ -231,19 +250,37 @@
     <h3>Wildfire Hazard Potential — USDA Forest Service</h3>
     <div class="kv-grid">
       <div class="kv-row">
-        <div class="kv-label">WHP Value</div>
-        <div class="kv-value">{{ wildfire.whp_value }} (national max: {{ wildfire.whp_national_max }})</div>
+        <div class="kv-label">WHP Index Value</div>
+        <div class="kv-value"><strong>{{ wildfire.whp_value }} — {{ wildfire.whp_class }}</strong> (national max: {{ wildfire.whp_national_max }})</div>
       </div>
       <div class="kv-row">
         <div class="kv-label">Data Vintage</div>
         <div class="kv-value">{{ wildfire.vintage }} ({{ wildfire.resolution_m }}m resolution)</div>
       </div>
     </div>
+    <div class="score-context">
+      <div class="score-context-title">About Wildfire Hazard Potential (WHP)</div>
+      WHP is a continuous index produced by the USDA Forest Service Fire Modeling Institute.
+      It reflects the relative potential for wildfire that would be difficult to control,
+      based on fire weather, fuel conditions, and topography. It is <em>not</em> a probability
+      of fire occurrence. The continuous index is typically grouped into five general classes:
+      <table class="score-range-table">
+        <tr><th>WHP Range (approx.)</th><th>Class</th></tr>
+        <tr><td>1 – 2,249</td><td>Very Low</td></tr>
+        <tr><td>2,250 – 8,999</td><td>Low</td></tr>
+        <tr><td>9,000 – 35,999</td><td>Moderate</td></tr>
+        <tr><td>36,000 – 143,999</td><td>High</td></tr>
+        <tr><td>≥ 144,000</td><td>Very High</td></tr>
+      </table>
+      Class breakpoints are approximate and may vary by dataset edition. For full
+      methodology and downloads, see
+      <a href="https://www.firelab.org/project/wildfire-hazard-potential">https://www.firelab.org/project/wildfire-hazard-potential</a>.
+    </div>
     <div class="inline-disclaimer">
-      USDA Forest Service Wildfire Hazard Potential is a modeled index, not a regulatory
-      classification. WUI status and local fire hazard severity zones may impose additional
-      requirements. Consult your local fire authority and AHJ. Source and methodology:
-      USDA Forest Service Fire Modeling Institute, {{ wildfire.vintage }}.
+      WHP is a modeled index, not a regulatory classification. Wildland-Urban Interface (WUI)
+      status and local fire hazard severity zones (FHSZ) may impose additional construction
+      and insurance requirements. Consult your local fire authority and AHJ.
+      Source: <a href="https://www.firelab.org/project/wildfire-hazard-potential">USDA Forest Service Fire Modeling Institute, {{ wildfire.vintage }}</a>.
     </div>
   </div>
 
@@ -325,7 +362,7 @@
       <strong>Attribution required by source:</strong>
       The values below are produced by FEMA's National Risk Index model — a composite
       score developed and published by FEMA. This is FEMA's model output, not a rating
-      derived by Plinth. See <em>fema.gov/nri</em> for full methodology.
+      derived by Plinth. See <a href="https://hazards.fema.gov/nri/">https://hazards.fema.gov/nri/</a> for full methodology.
       Source: FEMA National Risk Index.
     </div>
     <div class="kv-grid">
@@ -335,15 +372,34 @@
       </div>
       <div class="kv-row">
         <div class="kv-label">NRI Risk Score</div>
-        <div class="kv-value">{{ fema_nri.risk_score }} — {{ fema_nri.risk_ratng }}</div>
+        <div class="kv-value"><strong>{{ fema_nri.risk_score }} — {{ fema_nri.risk_ratng }}</strong></div>
       </div>
     </div>
-    <h4>Hazard Component Scores (FEMA NRI)</h4>
+    <div class="score-context">
+      <div class="score-context-title">About the FEMA National Risk Index Score</div>
+      The NRI composite score is a percentile-based value (0–100) representing a census
+      tract's relative natural hazard risk compared to all other US tracts, incorporating
+      expected annual loss, social vulnerability, and community resilience. FEMA uses
+      five rating categories:
+      <table class="score-range-table">
+        <tr><th>Score Range</th><th>FEMA Rating</th></tr>
+        <tr><td>0 – 20</td><td>Very Low</td></tr>
+        <tr><td>20 – 40</td><td>Relatively Low</td></tr>
+        <tr><td>40 – 60</td><td>Relatively Moderate</td></tr>
+        <tr><td>60 – 80</td><td>Relatively High</td></tr>
+        <tr><td>80 – 100</td><td>Very High</td></tr>
+      </table>
+      Component hazard scores use the same 0–100 percentile scale relative to other
+      US tracts. A higher score indicates higher relative risk for that hazard compared
+      to the national distribution. For full methodology, data dictionary, and interactive
+      map, see <a href="https://hazards.fema.gov/nri/">https://hazards.fema.gov/nri/</a>.
+    </div>
+    <h4>Hazard Component Scores (FEMA NRI — Source: FEMA, not Plinth-derived)</h4>
     <table class="data-table avoid-break">
       <thead>
         <tr>
           <th>Hazard</th>
-          <th style="text-align:right;">FEMA NRI Score</th>
+          <th style="text-align:right;">NRI Score (0–100 percentile)</th>
         </tr>
       </thead>
       <tbody>
@@ -648,7 +704,7 @@
     at the grid cell containing this location (≈0.5° resolution). They represent
     horizontal surface irradiance and do not account for shading, panel tilt,
     azimuth, or system losses. No energy production estimate is made or implied.
-    Source: NASA POWER (power.larc.nasa.gov), accessed {{ report_date }}.
+    Source: <a href="https://power.larc.nasa.gov/">NASA POWER (https://power.larc.nasa.gov/)</a>, accessed {{ report_date }}.
   </div>
 </div>
 
