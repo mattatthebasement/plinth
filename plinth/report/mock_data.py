@@ -8,9 +8,9 @@ MOCK_CONTEXT = {
     # ── Site identity ────────────────────────────────────────────────────
     "address": "11822 E 116th St N",
     "city_state_zip": "Collinsville, OK 74021",
-    "county": "Rogers County, Oklahoma",
-    "lat": 36.04700,
-    "lon": -95.81289,
+    "county": "Tulsa County, Oklahoma",
+    "lat": 36.32197,
+    "lon": -95.84203,
     "report_id": "PLN-20260309-DEMO",
     "report_date": "March 9, 2026",
     "prepared_for": "— Demo Report —",
@@ -76,7 +76,7 @@ MOCK_CONTEXT = {
         "flag": "EPA AQS credentials not yet configured. Data unavailable for this demo.",
     },
     "fema_nri": {
-        "tract_id": "40131950200",
+        "tract_id": "40143005811",
         "risk_score": 14.2,
         "risk_ratng": "Relatively Low",
         "hazards": {
@@ -143,7 +143,7 @@ MOCK_CONTEXT = {
     "solar": {
         "peak_sun_hours": 4.83,
         "annual_ghi_kwh_m2_day": 4.83,
-        "latitude": 36.047,
+        "latitude": 36.322,
         "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
         "sunrise": ["7:32", "7:06", "6:25", "6:37", "6:01", "5:50",
@@ -241,7 +241,7 @@ MOCK_CONTEXT = {
         ],
         "road_note": "Site is approximately 0.3 miles from US-20 (East Admiral Place) and 4.1 miles from US-412.",
         "transit_note": "No fixed-route public transit service identified within 5 miles of this location.",
-        "water_sewer_note": "Verify water and sewer service availability directly with the City of Collinsville Public Works and Rogers County Rural Water District.",
+        "water_sewer_note": "Verify water and sewer service availability directly with the City of Collinsville Public Works and Tulsa County utilities.",
     },
 
     # ── Section 8 — Data Sources & Methodology ───────────────────────────

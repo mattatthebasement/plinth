@@ -12,24 +12,29 @@ from prefect import flow, task, get_run_logger
 
 @task(name="fema-check-staleness")
 def check_fema_last_modified() -> tuple[bool, str]:
-    """Compare FEMA NFHL Last-Modified header against data_source_registry.
+    """Compare FEMA NFHL service editingInfo.lastEditDate against data_source_registry.
 
     Returns (changed: bool, remote_date: str).
     """
+    import json
     import subprocess
     from plinth.db.connection import get_connection
 
-    # Use the same region-specific URL as the FEMA ingestor
-    url = "https://hazards.fema.gov/nfhlv2/output/County/40131C_20241003.zip"
+    # Query the NFHL ArcGIS REST API editingInfo for last-edit timestamp
+    url = "https://hazards.fema.gov/arcgis/rest/services/public/NFHL/MapServer/28?f=json"
     result = subprocess.run(
-        ["curl", "-s", "-I", "--max-time", "30", url],
+        ["curl", "-s", "--max-time", "30", url],
         capture_output=True, text=True, timeout=35,
     )
     remote_date = ""
-    for line in result.stdout.splitlines():
-        if line.lower().startswith("last-modified:"):
-            remote_date = line.split(":", 1)[1].strip()
-            break
+    try:
+        data = json.loads(result.stdout)
+        # editingInfo.lastEditDate is an epoch ms timestamp
+        last_edit_ms = data.get("editingInfo", {}).get("lastEditDate")
+        if last_edit_ms:
+            remote_date = str(last_edit_ms)
+    except Exception:
+        pass
 
     if not remote_date:
         # Can't determine — assume stale to be safe
@@ -42,7 +47,7 @@ def check_fema_last_modified() -> tuple[bool, str]:
             )
             row = cur.fetchone()
 
-    # The notes field contains the raw download metadata; compare dates
+    # The notes field contains the raw download metadata; compare timestamps
     local_notes = row[0] if row else ""
     changed = remote_date not in (local_notes or "")
     return changed, remote_date

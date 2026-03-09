@@ -10,7 +10,7 @@ def query() -> None:
 @query.command("all")
 @click.option("--lat", required=True, type=float, help="Latitude (decimal degrees, WGS84).")
 @click.option("--lon", required=True, type=float, help="Longitude (decimal degrees, WGS84).")
-@click.option("--county-fips", default="40131", show_default=True,
+@click.option("--county-fips", default="40143", show_default=True,
               help="5-digit county FIPS for EPA AQS lookup.")
 @click.option("--radius-mi", default=5.0, show_default=True, type=float,
               help="Hydrography search radius in miles.")

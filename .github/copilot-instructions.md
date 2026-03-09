@@ -43,7 +43,7 @@ uv run plinth-cli ingest fema-nfhl --region ne-oklahoma
 uv run plinth-cli ingest all --region ne-oklahoma
 uv run plinth-cli raster index
 uv run plinth-cli cache clear --dataset nasa-power
-uv run plinth-cli query all --lat 36.047 --lon -95.813
+uv run plinth-cli query all --lat 36.322 --lon -95.842
 uv run plinth-cli report generate --address "11822 E 116th St N, Collinsville, OK"
 
 # Run all tests
@@ -181,8 +181,8 @@ Use this coordinate as the canonical test input for all query functions, integra
 | | |
 |---|---|
 | **Address** | 11822 E 116th St N, Collinsville, OK 74021 |
-| **Lat/Lon** | 36.04700191928075, -95.81288808698739 |
-| **County** | Rogers County, OK (FIPS 40131) |
+| **Lat/Lon** | 36.32197414685, -95.842032856739 |
+| **County** | Tulsa County, OK (FIPS 40143) |
 | **NHDPlus VPU** | 11 (Arkansas-White-Red) |
 | **Expected IECC Zone** | 3A (Warm Humid) |
 

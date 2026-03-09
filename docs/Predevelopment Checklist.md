@@ -5,7 +5,7 @@
 > Everything that must be in place before writing a line of code.
 > Checked items are prerequisites. Unchecked items are tasks.
 > **Test address:** 11822 E 116th St N, Collinsville, OK 74021
-> **Test coordinate:** 36.04700191928075, -95.81288808698739
+> **Test coordinate:** 36.32197414685, -95.842032856739
 
 ---
 
@@ -320,7 +320,7 @@ nproc                           # verify core count
 # Mapbox geocoding (replace YOUR_TOKEN)
 curl "https://api.mapbox.com/geocoding/v5/mapbox.places/11822%20E%20116th%20St%20N%2C%20Collinsville%2C%20OK.json?access_token=YOUR_TOKEN" \
   | jq '.features[0].geometry.coordinates'
-# Expected: [-95.812..., 36.047...]
+# Expected: [-95.842..., 36.321...]
 
 # Census API (replace YOUR_KEY)
 curl "https://api.census.gov/data/2023/acs/acs5?get=NAME,B01001_001E&for=state:40&key=YOUR_KEY" | jq .
@@ -331,7 +331,7 @@ curl "https://aqs.epa.gov/aqsweb/documents/data_api/signup?email=YOUR_EMAIL" | j
 # Or test with: /list/states?email=...&key=...
 
 # NASA POWER (no key required)
-curl "https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M&community=RE&longitude=-95.81&latitude=36.05&format=JSON" \
+curl "https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M&community=RE&longitude=-95.842&latitude=36.322&format=JSON" \
   | jq '.properties.parameter.T2M' | head -5
 # Expected: monthly temperature values
 ```
@@ -341,9 +341,9 @@ curl "https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M&
 | | Value |
 |---|---|
 | **Address** | 11822 E 116th St N, Collinsville, OK 74021 |
-| **Latitude** | 36.04700191928075 |
-| **Longitude** | -95.81288808698739 |
-| **County** | Rogers County, OK (FIPS 40131) |
+| **Latitude** | 36.32197414685 |
+| **Longitude** | -95.842032856739 |
+| **County** | Tulsa County, OK (FIPS 40143) |
 | **State** | Oklahoma (FIPS 40) |
 | **NHDPlus VPU** | 11 (Arkansas-White-Red) |
 | **SSURGO** | Oklahoma state .gdb |
