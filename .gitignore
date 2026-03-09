@@ -95,4 +95,3 @@ desktop.ini
 # Mapbox / generated images
 *.png.tmp
 map_cache/
-.pdf
