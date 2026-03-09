@@ -46,15 +46,19 @@ def _interpolate_color(temp_f: float) -> tuple[int, int, int]:
     return (247, 247, 247)
 
 
-def _temp_bg_filter(temp_f: float) -> str:
-    """Jinja2 filter: map °F → hex background color (blue→white→red)."""
-    r, g, b = _interpolate_color(temp_f)
+def _temp_bg_filter(temp_f) -> str:
+    """Jinja2 filter: map °F → hex background color (blue→white→red). Handles None."""
+    if temp_f is None:
+        return "#e0e0e0"
+    r, g, b = _interpolate_color(float(temp_f))
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def _temp_fg_filter(temp_f: float) -> str:
-    """Jinja2 filter: return legible text color for a given temperature background."""
-    r, g, b = _interpolate_color(temp_f)
+def _temp_fg_filter(temp_f) -> str:
+    """Jinja2 filter: return legible text color for a given temperature background. Handles None."""
+    if temp_f is None:
+        return "#888888"
+    r, g, b = _interpolate_color(float(temp_f))
     # Relative luminance (sRGB approximation)
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
     return "#ffffff" if luminance < 0.50 else "#1a1a1a"

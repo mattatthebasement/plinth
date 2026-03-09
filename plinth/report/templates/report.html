@@ -29,12 +29,19 @@
     <div class="cover-coords">{{ "%.5f"|format(lat) }}°N, {{ "%.5f"|format(lon|abs) }}°W &nbsp;|&nbsp; {{ county }}</div>
   </div>
 
+  {% if maps and maps.cover %}
+  <div class="cover-map">
+    <img src="{{ maps.cover }}" alt="Site location map" style="width:100%;height:100%;object-fit:cover;">
+    <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+  </div>
+  {% else %}
   <div class="cover-map map-placeholder">
     <div class="map-placeholder-inner">
       [Site Location Map — 1-Mile Context<br>© Mapbox © OpenStreetMap contributors]
     </div>
     <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
   </div>
+  {% endif %}
 
   <div class="cover-meta-grid">
     <div class="cover-meta-row">
@@ -476,12 +483,19 @@
       </div>
     </div>
     <div class="col">
+      {% if maps and maps.terrain %}
+      <div style="height:3.2in;overflow:hidden;position:relative;">
+        <img src="{{ maps.terrain }}" alt="Terrain map" style="width:100%;height:100%;object-fit:cover;">
+        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+      </div>
+      {% else %}
       <div class="map-placeholder" style="height:3.2in;">
         <div class="map-placeholder-inner">
           [Terrain / Hillshade Map<br>1-Mile Radius<br>Scale bar · North arrow<br>© Mapbox © OpenStreetMap contributors]
         </div>
         <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
       </div>
+      {% endif %}
     </div>
   </div>
 
@@ -617,19 +631,19 @@
     <tbody>
       <tr>
         <td class="row-label">Max Temp (°F)</td>
-        {% for v in climate.tmax_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "%.0f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.tmax_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "N/A" if v is none else "%.0f"|format(v) }}</td>{% endfor %}
       </tr>
       <tr>
         <td class="row-label">Min Temp (°F)</td>
-        {% for v in climate.tmin_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "%.0f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.tmin_f %}<td style="background:{{ v|temp_bg }};color:{{ v|temp_fg }};">{{ "N/A" if v is none else "%.0f"|format(v) }}</td>{% endfor %}
       </tr>
       <tr>
         <td class="row-label">Precip (in)</td>
-        {% for v in climate.prcp_in %}<td>{{ "%.2f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.prcp_in %}<td>{{ "—" if v is none else "%.2f"|format(v) }}</td>{% endfor %}
       </tr>
       <tr>
         <td class="row-label">Snowfall (in)</td>
-        {% for v in climate.snow_in %}<td>{{ "%.1f"|format(v) }}</td>{% endfor %}
+        {% for v in climate.snow_in %}<td>{{ "—" if v is none else "%.1f"|format(v) }}</td>{% endfor %}
       </tr>
     </tbody>
   </table>
@@ -700,12 +714,19 @@
       </table>
     </div>
     <div class="col">
+      {% if maps and maps.solar %}
+      <div style="height:2.8in;overflow:hidden;position:relative;">
+        <img src="{{ maps.solar }}" alt="Solar resource map" style="width:100%;height:100%;object-fit:cover;">
+        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
+      </div>
+      {% else %}
       <div class="map-placeholder" style="height:2.8in;">
         <div class="map-placeholder-inner">
           [Solar Resource Map<br>Annual GHI Raster<br>© Mapbox © OpenStreetMap contributors]
         </div>
         <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
       </div>
+      {% endif %}
     </div>
   </div>
 

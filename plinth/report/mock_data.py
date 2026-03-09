@@ -245,6 +245,7 @@ MOCK_CONTEXT = {
     },
 
     # ── Section 8 — Data Sources & Methodology ───────────────────────────
+    "maps": {"cover": None, "terrain": None, "solar": None},
     "sources": [
         {"name": "FEMA National Flood Hazard Layer (NFHL)", "version": "2019-11-15", "refresh": "Monthly", "storage": "PostGIS"},
         {"name": "USGS 3D Elevation Program (3DEP)", "version": "2023", "refresh": "Annual", "storage": "MinIO COG"},
