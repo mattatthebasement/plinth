@@ -156,33 +156,74 @@ MOCK_CONTEXT = {
     "demographics": {
         "note": "Area-weighted block group intersections. Straight-line radius buffers — physical barriers not accounted for.",
         "acs_vintage": "2019–2023 ACS 5-Year Estimates",
-        "radii": [
+        "groups": [
             {
-                "label": "1-Mile Radius",
-                "population": 8200,
-                "households": 3150,
-                "median_hhi": "$62,400",
-                "median_age": 36.2,
-                "pct_owner_occupied": "71%",
-                "pct_bachelor_plus": "28%",
+                "heading": "Population & Age",
+                "rows": [
+                    {"variable": "Total Population",       "r1": "8,200",  "r5": "42,500",  "r10": "128,000"},
+                    {"variable": "Median Age",             "r1": "36.2",   "r5": "35.8",    "r10": "36.4"},
+                    {"variable": "Average Household Size", "r1": "2.61",   "r5": "2.63",    "r10": "2.57"},
+                ],
             },
             {
-                "label": "5-Mile Radius",
-                "population": 42500,
-                "households": 16800,
-                "median_hhi": "$68,200",
-                "median_age": 35.8,
-                "pct_owner_occupied": "69%",
-                "pct_bachelor_plus": "31%",
+                "heading": "Households & Income",
+                "rows": [
+                    {"variable": "Total Households",              "r1": "3,150",   "r5": "16,800",  "r10": "51,200"},
+                    {"variable": "Median Household Income",       "r1": "$62,400", "r5": "$68,200", "r10": "$61,800"},
+                    {"variable": "Per Capita Income",             "r1": "$31,100", "r5": "$33,400", "r10": "$29,200"},
+                    {"variable": "% Below Poverty Level",         "r1": "10.1%",   "r5": "9.2%",    "r10": "12.4%"},
+                    {"variable": "% Receiving Public Assistance", "r1": "2.8%",    "r5": "2.4%",    "r10": "3.6%"},
+                ],
             },
             {
-                "label": "10-Mile Radius",
-                "population": 128000,
-                "households": 51200,
-                "median_hhi": "$61,800",
-                "median_age": 36.4,
-                "pct_owner_occupied": "65%",
-                "pct_bachelor_plus": "29%",
+                "heading": "Housing Stock",
+                "rows": [
+                    {"variable": "Total Housing Units", "r1": "3,410",    "r5": "18,100",   "r10": "56,400"},
+                    {"variable": "Median Home Value",   "r1": "$181,000", "r5": "$196,000", "r10": "$174,000"},
+                    {"variable": "Median Gross Rent",   "r1": "$854",     "r5": "$924",     "r10": "$882"},
+                    {"variable": "Vacancy Rate",        "r1": "7.6%",     "r5": "7.2%",     "r10": "9.1%"},
+                    {"variable": "Median Year Built",   "r1": "1991",     "r5": "1994",     "r10": "1988"},
+                ],
+            },
+            {
+                "heading": "Tenure",
+                "rows": [
+                    {"variable": "% Owner-Occupied", "r1": "71%", "r5": "69%", "r10": "65%"},
+                    {"variable": "% Renter-Occupied", "r1": "29%", "r5": "31%", "r10": "35%"},
+                ],
+            },
+            {
+                "heading": "Education",
+                "rows": [
+                    {"variable": "% Bachelor's Degree or Higher",    "r1": "28%", "r5": "31%", "r10": "29%"},
+                    {"variable": "% High School Diploma or Higher",  "r1": "89%", "r5": "90%", "r10": "87%"},
+                ],
+            },
+            {
+                "heading": "Commute & Employment",
+                "rows": [
+                    {"variable": "Mean Travel Time to Work (min)", "r1": "28.4",  "r5": "26.1",  "r10": "28.7"},
+                    {"variable": "% Drive Alone",                  "r1": "84.8%", "r5": "84.2%", "r10": "83.1%"},
+                    {"variable": "% Work from Home",               "r1": "7.9%",  "r5": "10.2%", "r10": "9.1%"},
+                    {"variable": "Unemployment Rate",              "r1": "4.2%",  "r5": "3.8%",  "r10": "4.5%"},
+                    {"variable": "Labor Force Participation Rate", "r1": "61.8%", "r5": "63.1%", "r10": "61.2%"},
+                ],
+            },
+            {
+                "heading": "Race & Ethnicity",
+                "rows": [
+                    {"variable": "% Non-Hispanic White",        "r1": "78.2%", "r5": "76.4%", "r10": "72.1%"},
+                    {"variable": "% Hispanic or Latino",        "r1": "7.8%",  "r5": "9.1%",  "r10": "11.3%"},
+                    {"variable": "% Black or African American", "r1": "5.2%",  "r5": "6.0%",  "r10": "8.1%"},
+                    {"variable": "% Asian",                     "r1": "2.1%",  "r5": "2.4%",  "r10": "2.8%"},
+                    {"variable": "% Other / Multiracial",       "r1": "6.7%",  "r5": "6.1%",  "r10": "5.7%"},
+                ],
+            },
+            {
+                "heading": "Language",
+                "rows": [
+                    {"variable": "% Limited English Proficiency", "r1": "2.9%", "r5": "3.8%", "r10": "5.1%"},
+                ],
             },
         ],
     },

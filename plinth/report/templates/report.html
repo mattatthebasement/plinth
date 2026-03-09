@@ -667,23 +667,31 @@
     Source: {{ demographics.acs_vintage }}.
   </p>
 
-  <div class="demo-col-3">
-    {% for r in demographics.radii %}
-    <div class="demo-col">
-      <div class="demo-radius-header">{{ r.label }}</div>
-      <table class="data-table">
-        <tbody>
-          <tr><td>Population</td><td style="text-align:right;">{{ "{:,}".format(r.population) }}</td></tr>
-          <tr><td>Households</td><td style="text-align:right;">{{ "{:,}".format(r.households) }}</td></tr>
-          <tr><td>Median HHI</td><td style="text-align:right;">{{ r.median_hhi }}</td></tr>
-          <tr><td>Median Age</td><td style="text-align:right;">{{ r.median_age }}</td></tr>
-          <tr><td>Owner Occupied</td><td style="text-align:right;">{{ r.pct_owner_occupied }}</td></tr>
-          <tr><td>Bach. Degree+</td><td style="text-align:right;">{{ r.pct_bachelor_plus }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-    {% endfor %}
-  </div>
+  <table class="data-table demo-merged-table">
+    <thead>
+      <tr>
+        <th style="width:42%;">Variable</th>
+        <th style="width:19%;text-align:right;">1-Mile Radius</th>
+        <th style="width:19%;text-align:right;">5-Mile Radius</th>
+        <th style="width:20%;text-align:right;">10-Mile Radius</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for group in demographics.groups %}
+      <tr class="demo-group-heading">
+        <td colspan="4">{{ group.heading }}</td>
+      </tr>
+      {% for row in group.rows %}
+      <tr>
+        <td style="padding-left:14pt;">{{ row.variable }}</td>
+        <td style="text-align:right;font-family:'Courier New',monospace;font-size:8pt;">{{ row.r1 }}</td>
+        <td style="text-align:right;font-family:'Courier New',monospace;font-size:8pt;">{{ row.r5 }}</td>
+        <td style="text-align:right;font-family:'Courier New',monospace;font-size:8pt;">{{ row.r10 }}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </tbody>
+  </table>
 
   <div class="inline-disclaimer">
     Demographic values are area-weighted estimates derived from Census block groups

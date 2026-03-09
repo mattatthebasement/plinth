@@ -454,6 +454,19 @@ table.solar-table td.row-label {
     font-size: 8pt;
 }
 
+/* ── Section 6 demographics merged table ────────────────────────── */
+table.demo-merged-table tr.demo-group-heading td {
+    background: #e8e8e8;
+    font-weight: 700;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.4pt;
+    color: #333;
+    padding: 4pt 8pt;
+    border-top: 0.75pt solid #bbb;
+    border-bottom: 0.25pt solid #ccc;
+}
+
 /* ── Stat callout box ───────────────────────────────────────────── */
 .stat-box {
     display: inline-block;
