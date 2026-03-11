@@ -17,16 +17,47 @@ _TTL_DAYS = 365
 
 # ACS variable codes → internal field names
 ACS_VARS: dict[str, str] = {
-    # Population & Age
+    # Population, Sex & Age (B01001)
     "B01003_001E": "total_population",
     "B01002_001E": "median_age",
+    "B01002_002E": "median_age_male",
+    "B01002_003E": "median_age_female",
     "B25010_001E": "avg_household_size",
+    "B01001_002E": "male_total",
+    "B01001_026E": "female_total",
+    # Male age brackets
+    "B01001_003E": "m_under5", "B01001_004E": "m_5_9",
+    "B01001_005E": "m_10_14", "B01001_006E": "m_15_17",
+    "B01001_007E": "m_18_19", "B01001_008E": "m_20",
+    "B01001_009E": "m_21", "B01001_010E": "m_22_24",
+    "B01001_011E": "m_25_29", "B01001_012E": "m_30_34",
+    "B01001_013E": "m_35_39", "B01001_014E": "m_40_44",
+    "B01001_015E": "m_45_49", "B01001_016E": "m_50_54",
+    "B01001_017E": "m_55_59", "B01001_018E": "m_60_61",
+    "B01001_019E": "m_62_64", "B01001_020E": "m_65_66",
+    "B01001_021E": "m_67_69", "B01001_022E": "m_70_74",
+    "B01001_023E": "m_75_79", "B01001_024E": "m_80_84",
+    "B01001_025E": "m_85plus",
+    # Female age brackets
+    "B01001_027E": "f_under5", "B01001_028E": "f_5_9",
+    "B01001_029E": "f_10_14", "B01001_030E": "f_15_17",
+    "B01001_031E": "f_18_19", "B01001_032E": "f_20",
+    "B01001_033E": "f_21", "B01001_034E": "f_22_24",
+    "B01001_035E": "f_25_29", "B01001_036E": "f_30_34",
+    "B01001_037E": "f_35_39", "B01001_038E": "f_40_44",
+    "B01001_039E": "f_45_49", "B01001_040E": "f_50_54",
+    "B01001_041E": "f_55_59", "B01001_042E": "f_60_61",
+    "B01001_043E": "f_62_64", "B01001_044E": "f_65_66",
+    "B01001_045E": "f_67_69", "B01001_046E": "f_70_74",
+    "B01001_047E": "f_75_79", "B01001_048E": "f_80_84",
+    "B01001_049E": "f_85plus",
     # Households & Income
     "B11001_001E": "total_households",
     "B19013_001E": "median_hhi",
     "B19301_001E": "per_capita_income",
-    "B17001_002E": "below_poverty_count",
-    "B17001_001E": "poverty_universe",
+    "C17002_001E": "poverty_universe",
+    "C17002_002E": "poverty_under_050",
+    "C17002_003E": "poverty_050_099",
     "B19057_002E": "public_assistance_count",
     "B19057_001E": "public_assistance_universe",
     # Housing Stock
@@ -52,8 +83,19 @@ ACS_VARS: dict[str, str] = {
     "B15003_024E": "professional",
     "B15003_025E": "doctorate",
     # Commute & Employment
-    "B08136_001E": "total_travel_time",
-    "B08101_001E": "total_workers",
+    "B08303_001E": "travel_time_total",
+    "B08303_002E": "travel_time_lt5",
+    "B08303_003E": "travel_time_5_9",
+    "B08303_004E": "travel_time_10_14",
+    "B08303_005E": "travel_time_15_19",
+    "B08303_006E": "travel_time_20_24",
+    "B08303_007E": "travel_time_25_29",
+    "B08303_008E": "travel_time_30_34",
+    "B08303_009E": "travel_time_35_39",
+    "B08303_010E": "travel_time_40_44",
+    "B08303_011E": "travel_time_45_59",
+    "B08303_012E": "travel_time_60_89",
+    "B08303_013E": "travel_time_90plus",
     "B08301_003E": "drive_alone",
     "B08301_001E": "commute_universe",
     "B08301_021E": "work_from_home",
@@ -61,22 +103,53 @@ ACS_VARS: dict[str, str] = {
     "B23025_003E": "labor_force",
     "B23025_002E": "in_labor_force",
     "B23025_001E": "labor_force_universe",
+    # Occupation (C24010 — combined male+female top-level categories)
+    "C24010_001E": "occ_total",
+    "C24010_003E": "occ_m_mgmt", "C24010_019E": "occ_m_service",
+    "C24010_027E": "occ_m_sales", "C24010_030E": "occ_m_natural",
+    "C24010_034E": "occ_m_production",
+    "C24010_039E": "occ_f_mgmt", "C24010_055E": "occ_f_service",
+    "C24010_063E": "occ_f_sales", "C24010_066E": "occ_f_natural",
+    "C24010_070E": "occ_f_production",
+    # Industry (C24030 — combined male+female top-level categories)
+    "C24030_001E": "ind_total",
+    "C24030_003E": "ind_m_ag_mining", "C24030_006E": "ind_m_construction",
+    "C24030_007E": "ind_m_manufacturing", "C24030_008E": "ind_m_wholesale",
+    "C24030_009E": "ind_m_retail", "C24030_010E": "ind_m_transport_util",
+    "C24030_013E": "ind_m_information", "C24030_014E": "ind_m_finance_re",
+    "C24030_017E": "ind_m_professional", "C24030_021E": "ind_m_edu_health",
+    "C24030_024E": "ind_m_arts_food", "C24030_027E": "ind_m_other_svc",
+    "C24030_028E": "ind_m_public_admin",
+    "C24030_030E": "ind_f_ag_mining", "C24030_033E": "ind_f_construction",
+    "C24030_034E": "ind_f_manufacturing", "C24030_035E": "ind_f_wholesale",
+    "C24030_036E": "ind_f_retail", "C24030_037E": "ind_f_transport_util",
+    "C24030_040E": "ind_f_information", "C24030_041E": "ind_f_finance_re",
+    "C24030_044E": "ind_f_professional", "C24030_048E": "ind_f_edu_health",
+    "C24030_051E": "ind_f_arts_food", "C24030_054E": "ind_f_other_svc",
+    "C24030_055E": "ind_f_public_admin",
     # Race & Ethnicity
     "B03002_001E": "total_race",
     "B03002_003E": "non_hispanic_white",
     "B03002_012E": "hispanic",
     "B03002_004E": "black",
     "B03002_006E": "asian",
-    # Language
-    "B16002_001E": "language_universe",
-    "B16002_004E": "limited_english_spanish",
-    "B16002_007E": "limited_english_other_indo",
-    "B16002_010E": "limited_english_asian",
-    "B16002_013E": "limited_english_other",
+    # Language (C16002 = household-level; available at block group)
+    "C16002_001E": "language_universe",
+    "C16002_004E": "limited_english_spanish",
+    "C16002_007E": "limited_english_other_indo",
+    "C16002_010E": "limited_english_asian",
+    "C16002_013E": "limited_english_other",
 }
 
 _VAR_CODES = list(ACS_VARS.keys())
 _VAR_NAMES = list(ACS_VARS.values())
+
+# Census API allows ~50 variables per request; split into batches
+_MAX_VARS_PER_REQUEST = 48
+_VAR_BATCHES = [
+    _VAR_CODES[i : i + _MAX_VARS_PER_REQUEST]
+    for i in range(0, len(_VAR_CODES), _MAX_VARS_PER_REQUEST)
+]
 
 
 def _cache_key(year: int, geoid: str) -> str:
@@ -97,33 +170,34 @@ def _fetch_block_group(
     acs_year: int,
 ) -> dict[str, Any] | None:
     """Fetch ACS data for a single block group. Returns field dict or None on error."""
-    get_str = "NAME," + ",".join(_VAR_CODES)
-    url = (
-        f"{_BASE}/{acs_year}/acs/acs5"
-        f"?get={get_str}"
-        f"&for=block+group:{block_group}"
-        f"&in=state:{state}%20county:{county}%20tract:{tract}"
-        f"&key={api_key}"
-    )
-    try:
-        resp = httpx.get(url, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as exc:
-        log.warning("Census ACS fetch failed for %s%s%s%s: %s", state, county, tract, block_group, exc)
-        return None
+    combined_row: dict[str, str] = {}
+    for batch in _VAR_BATCHES:
+        get_str = ",".join(batch)
+        url = (
+            f"{_BASE}/{acs_year}/acs/acs5"
+            f"?get={get_str}"
+            f"&for=block+group:{block_group}"
+            f"&in=state:{state}%20county:{county}%20tract:{tract}"
+            f"&key={api_key}"
+        )
+        try:
+            resp = httpx.get(url, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            log.warning("Census ACS fetch failed for %s%s%s%s: %s", state, county, tract, block_group, exc)
+            return None
 
-    if not data or len(data) < 2:
-        return None
+        if not data or len(data) < 2:
+            return None
 
-    # data[0] is header row, data[1] is the values row
-    header = data[0]
-    values = data[1]
-    row = dict(zip(header, values))
+        header = data[0]
+        values = data[1]
+        combined_row.update(dict(zip(header, values)))
 
     result: dict[str, float | None] = {}
     for code, field in ACS_VARS.items():
-        raw = row.get(code)
+        raw = combined_row.get(code)
         try:
             val = float(raw) if raw not in (None, "", "-666666666", "-999999999") else None
         except (TypeError, ValueError):
@@ -179,14 +253,50 @@ def _aggregate(
     count_fields = [
         "total_population", "total_households", "total_housing_units",
         "total_housing_units_occ", "vacant_units",
-        "below_poverty_count", "poverty_universe",
+        "male_total", "female_total",
+        # Male age brackets
+        "m_under5", "m_5_9", "m_10_14", "m_15_17",
+        "m_18_19", "m_20", "m_21", "m_22_24",
+        "m_25_29", "m_30_34", "m_35_39", "m_40_44",
+        "m_45_49", "m_50_54", "m_55_59", "m_60_61",
+        "m_62_64", "m_65_66", "m_67_69", "m_70_74",
+        "m_75_79", "m_80_84", "m_85plus",
+        # Female age brackets
+        "f_under5", "f_5_9", "f_10_14", "f_15_17",
+        "f_18_19", "f_20", "f_21", "f_22_24",
+        "f_25_29", "f_30_34", "f_35_39", "f_40_44",
+        "f_45_49", "f_50_54", "f_55_59", "f_60_61",
+        "f_62_64", "f_65_66", "f_67_69", "f_70_74",
+        "f_75_79", "f_80_84", "f_85plus",
+        # Income
+        "poverty_under_050", "poverty_050_099", "poverty_universe",
         "public_assistance_count", "public_assistance_universe",
         "owner_occupied", "renter_occupied", "tenure_universe",
         "edu_universe", "hs_diploma", "ged", "some_college_lt1",
         "some_college_ge1", "associates", "bachelors", "masters",
         "professional", "doctorate",
-        "total_workers", "drive_alone", "commute_universe", "work_from_home",
+        "travel_time_total", "travel_time_lt5", "travel_time_5_9",
+        "travel_time_10_14", "travel_time_15_19", "travel_time_20_24",
+        "travel_time_25_29", "travel_time_30_34", "travel_time_35_39",
+        "travel_time_40_44", "travel_time_45_59", "travel_time_60_89",
+        "travel_time_90plus",
+        "drive_alone", "commute_universe", "work_from_home",
         "unemployed", "labor_force", "in_labor_force", "labor_force_universe",
+        # Occupation
+        "occ_total",
+        "occ_m_mgmt", "occ_m_service", "occ_m_sales", "occ_m_natural", "occ_m_production",
+        "occ_f_mgmt", "occ_f_service", "occ_f_sales", "occ_f_natural", "occ_f_production",
+        # Industry
+        "ind_total",
+        "ind_m_ag_mining", "ind_m_construction", "ind_m_manufacturing",
+        "ind_m_wholesale", "ind_m_retail", "ind_m_transport_util",
+        "ind_m_information", "ind_m_finance_re", "ind_m_professional",
+        "ind_m_edu_health", "ind_m_arts_food", "ind_m_other_svc", "ind_m_public_admin",
+        "ind_f_ag_mining", "ind_f_construction", "ind_f_manufacturing",
+        "ind_f_wholesale", "ind_f_retail", "ind_f_transport_util",
+        "ind_f_information", "ind_f_finance_re", "ind_f_professional",
+        "ind_f_edu_health", "ind_f_arts_food", "ind_f_other_svc", "ind_f_public_admin",
+        # Race & Language
         "total_race", "non_hispanic_white", "hispanic", "black", "asian",
         "language_universe", "limited_english_spanish",
         "limited_english_other_indo", "limited_english_asian",
@@ -195,10 +305,10 @@ def _aggregate(
 
     # Weighted average fields (use total_population as weight)
     avg_fields = [
-        "median_age", "avg_household_size",
+        "median_age", "median_age_male", "median_age_female",
+        "avg_household_size",
         "median_hhi", "per_capita_income",
         "median_home_value", "median_gross_rent", "median_year_built",
-        "total_travel_time",  # aggregated then divided by total_workers
     ]
 
     count_sums: dict[str, float] = {f: 0.0 for f in count_fields}
@@ -236,13 +346,75 @@ def _aggregate(
         else:
             agg[field] = None
 
-    # Mean travel time = total_travel_time / total_workers
-    tt = count_sums.get("total_travel_time")
-    tw = count_sums.get("total_workers")
-    if tt and tw:
-        agg["mean_travel_time_min"] = tt / tw
+    # Mean travel time from B08303 bracket midpoints
+    _TRAVEL_MIDPOINTS = [
+        ("travel_time_lt5", 2.5), ("travel_time_5_9", 7.0),
+        ("travel_time_10_14", 12.0), ("travel_time_15_19", 17.0),
+        ("travel_time_20_24", 22.0), ("travel_time_25_29", 27.0),
+        ("travel_time_30_34", 32.0), ("travel_time_35_39", 37.0),
+        ("travel_time_40_44", 42.0), ("travel_time_45_59", 52.0),
+        ("travel_time_60_89", 74.5), ("travel_time_90plus", 100.0),
+    ]
+    tt_total = count_sums.get("travel_time_total", 0.0)
+    if tt_total > 0:
+        weighted_min = sum(count_sums.get(f, 0.0) * mid for f, mid in _TRAVEL_MIDPOINTS)
+        agg["mean_travel_time_min"] = weighted_min / tt_total
     else:
         agg["mean_travel_time_min"] = None
+
+    # Below-poverty count from C17002 (under 0.50 + 0.50–0.99)
+    agg["below_poverty_count"] = (
+        (count_sums.get("poverty_under_050") or 0.0)
+        + (count_sums.get("poverty_050_099") or 0.0)
+    ) or None
+
+    # ── Derived age groups (sum male + female brackets) ──────────────
+    def _age_sum(*fields: str) -> float | None:
+        total = sum(count_sums.get(f, 0.0) for f in fields)
+        return total if total > 0 else None
+
+    agg["age_under_18"] = _age_sum(
+        "m_under5", "m_5_9", "m_10_14", "m_15_17",
+        "f_under5", "f_5_9", "f_10_14", "f_15_17",
+    )
+    agg["age_18_34"] = _age_sum(
+        "m_18_19", "m_20", "m_21", "m_22_24", "m_25_29", "m_30_34",
+        "f_18_19", "f_20", "f_21", "f_22_24", "f_25_29", "f_30_34",
+    )
+    agg["age_35_54"] = _age_sum(
+        "m_35_39", "m_40_44", "m_45_49", "m_50_54",
+        "f_35_39", "f_40_44", "f_45_49", "f_50_54",
+    )
+    agg["age_55_74"] = _age_sum(
+        "m_55_59", "m_60_61", "m_62_64", "m_65_66", "m_67_69", "m_70_74",
+        "f_55_59", "f_60_61", "f_62_64", "f_65_66", "f_67_69", "f_70_74",
+    )
+    agg["age_75_plus"] = _age_sum(
+        "m_75_79", "m_80_84", "m_85plus",
+        "f_75_79", "f_80_84", "f_85plus",
+    )
+
+    # ── Combined occupation totals (male + female) ───────────────────
+    agg["occ_mgmt"] = _age_sum("occ_m_mgmt", "occ_f_mgmt")
+    agg["occ_service"] = _age_sum("occ_m_service", "occ_f_service")
+    agg["occ_sales"] = _age_sum("occ_m_sales", "occ_f_sales")
+    agg["occ_natural"] = _age_sum("occ_m_natural", "occ_f_natural")
+    agg["occ_production"] = _age_sum("occ_m_production", "occ_f_production")
+
+    # ── Combined industry totals (male + female) ─────────────────────
+    agg["ind_ag_mining"] = _age_sum("ind_m_ag_mining", "ind_f_ag_mining")
+    agg["ind_construction"] = _age_sum("ind_m_construction", "ind_f_construction")
+    agg["ind_manufacturing"] = _age_sum("ind_m_manufacturing", "ind_f_manufacturing")
+    agg["ind_wholesale"] = _age_sum("ind_m_wholesale", "ind_f_wholesale")
+    agg["ind_retail"] = _age_sum("ind_m_retail", "ind_f_retail")
+    agg["ind_transport_util"] = _age_sum("ind_m_transport_util", "ind_f_transport_util")
+    agg["ind_information"] = _age_sum("ind_m_information", "ind_f_information")
+    agg["ind_finance_re"] = _age_sum("ind_m_finance_re", "ind_f_finance_re")
+    agg["ind_professional"] = _age_sum("ind_m_professional", "ind_f_professional")
+    agg["ind_edu_health"] = _age_sum("ind_m_edu_health", "ind_f_edu_health")
+    agg["ind_arts_food"] = _age_sum("ind_m_arts_food", "ind_f_arts_food")
+    agg["ind_other_svc"] = _age_sum("ind_m_other_svc", "ind_f_other_svc")
+    agg["ind_public_admin"] = _age_sum("ind_m_public_admin", "ind_f_public_admin")
 
     return agg
 
@@ -275,6 +447,13 @@ def _fmt_year(val: float | None) -> str:
     if val is None:
         return "N/A"
     return str(int(round(val)))
+
+
+def _parse_pct(s: str) -> float:
+    """Parse a formatted percentage string like '33.6%' to a float for sorting. N/A → -1."""
+    if s == "N/A":
+        return -1.0
+    return float(s.rstrip("%"))
 
 
 def _build_demographics_rows(aggs: dict[str, dict[str, Any]]) -> dict:
@@ -396,14 +575,23 @@ def _build_demographics_rows(aggs: dict[str, dict[str, Any]]) -> dict:
                 "heading": "Population & Age",
                 "rows": [
                     _count_row("Total Population", "total_population"),
-                    _decimal_row("Median Age", "median_age"),
-                    _decimal_row("Average Household Size", "avg_household_size", 2),
+                    _count_row("Male", "male_total"),
+                    _count_row("Female", "female_total"),
+                    _decimal_row("Median Age – Total", "median_age"),
+                    _decimal_row("Median Age – Male", "median_age_male"),
+                    _decimal_row("Median Age – Female", "median_age_female"),
+                    _row("% Under 18", *[_fmt_pct(_pct_from("age_under_18", "total_population", r)) for r in radii]),
+                    _row("% 18–34", *[_fmt_pct(_pct_from("age_18_34", "total_population", r)) for r in radii]),
+                    _row("% 35–54", *[_fmt_pct(_pct_from("age_35_54", "total_population", r)) for r in radii]),
+                    _row("% 55–74", *[_fmt_pct(_pct_from("age_55_74", "total_population", r)) for r in radii]),
+                    _row("% 75+", *[_fmt_pct(_pct_from("age_75_plus", "total_population", r)) for r in radii]),
                 ],
             },
             {
                 "heading": "Households & Income",
                 "rows": [
                     _count_row("Total Households", "total_households"),
+                    _decimal_row("Average Household Size", "avg_household_size", 2),
                     _currency_row("Median Household Income", "median_hhi"),
                     _currency_row("Per Capita Income", "per_capita_income"),
                     _row(
@@ -475,6 +663,42 @@ def _build_demographics_rows(aggs: dict[str, dict[str, Any]]) -> dict:
                 ],
             },
             {
+                "heading": "Occupation",
+                "rows": sorted(
+                    [
+                        _row("% Management, Business, Science & Arts", *[_fmt_pct(_pct_from("occ_mgmt", "occ_total", r)) for r in radii]),
+                        _row("% Service", *[_fmt_pct(_pct_from("occ_service", "occ_total", r)) for r in radii]),
+                        _row("% Sales & Office", *[_fmt_pct(_pct_from("occ_sales", "occ_total", r)) for r in radii]),
+                        _row("% Natural Resources, Construction & Maintenance", *[_fmt_pct(_pct_from("occ_natural", "occ_total", r)) for r in radii]),
+                        _row("% Production, Transportation & Material Moving", *[_fmt_pct(_pct_from("occ_production", "occ_total", r)) for r in radii]),
+                    ],
+                    key=lambda r: _parse_pct(r["r1"]),
+                    reverse=True,
+                ),
+            },
+            {
+                "heading": "Industry",
+                "rows": sorted(
+                    [
+                        _row("% Agriculture, Forestry, Mining", *[_fmt_pct(_pct_from("ind_ag_mining", "ind_total", r)) for r in radii]),
+                        _row("% Construction", *[_fmt_pct(_pct_from("ind_construction", "ind_total", r)) for r in radii]),
+                        _row("% Manufacturing", *[_fmt_pct(_pct_from("ind_manufacturing", "ind_total", r)) for r in radii]),
+                        _row("% Wholesale Trade", *[_fmt_pct(_pct_from("ind_wholesale", "ind_total", r)) for r in radii]),
+                        _row("% Retail Trade", *[_fmt_pct(_pct_from("ind_retail", "ind_total", r)) for r in radii]),
+                        _row("% Transportation, Warehousing & Utilities", *[_fmt_pct(_pct_from("ind_transport_util", "ind_total", r)) for r in radii]),
+                        _row("% Information", *[_fmt_pct(_pct_from("ind_information", "ind_total", r)) for r in radii]),
+                        _row("% Finance, Insurance & Real Estate", *[_fmt_pct(_pct_from("ind_finance_re", "ind_total", r)) for r in radii]),
+                        _row("% Professional, Scientific & Management", *[_fmt_pct(_pct_from("ind_professional", "ind_total", r)) for r in radii]),
+                        _row("% Education, Health Care & Social Assistance", *[_fmt_pct(_pct_from("ind_edu_health", "ind_total", r)) for r in radii]),
+                        _row("% Arts, Entertainment, Accommodation & Food", *[_fmt_pct(_pct_from("ind_arts_food", "ind_total", r)) for r in radii]),
+                        _row("% Other Services", *[_fmt_pct(_pct_from("ind_other_svc", "ind_total", r)) for r in radii]),
+                        _row("% Public Administration", *[_fmt_pct(_pct_from("ind_public_admin", "ind_total", r)) for r in radii]),
+                    ],
+                    key=lambda r: _parse_pct(r["r1"]),
+                    reverse=True,
+                ),
+            },
+            {
                 "heading": "Race & Ethnicity",
                 "rows": [
                     _row(
@@ -503,7 +727,7 @@ def _build_demographics_rows(aggs: dict[str, dict[str, Any]]) -> dict:
                 "heading": "Language",
                 "rows": [
                     _row(
-                        "% Limited English Proficiency",
+                        "% Limited English Proficiency (Households)",
                         *[_fmt_pct(_limited_english_pct(r)) for r in radii],
                     ),
                 ],

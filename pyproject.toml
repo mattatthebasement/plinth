@@ -29,6 +29,7 @@ dependencies = [
     "weasyprint>=62.0",
     "matplotlib>=3.8",
     "astral>=3.2",
+    "timezonefinder>=8.2.1",
 ]
 
 [project.scripts]

@@ -20,10 +20,6 @@
     <div class="cover-tagline">Site Intelligence Platform</div>
   </div>
 
-  <div class="demo-watermark">Demo — Illustrative Data Only</div>
-
-  <div class="cover-report-type">Site Intelligence Report</div>
-
   <div class="cover-address-block">
     <div class="cover-address">{{ address }}</div>
     <div class="cover-city-state">{{ city_state_zip }}</div>
@@ -340,11 +336,11 @@
       </div>
       <div class="kv-row">
         <div class="kv-label">Ozone DV</div>
-        <div class="kv-value">{{ air_quality.ozone_ppb }} ppb</div>
+        <div class="kv-value">{{ air_quality.ozone_ppb }} ppb (NAAQS 8-hr standard: 70 ppb)</div>
       </div>
       <div class="kv-row">
-        <div class="kv-label">Monitor</div>
-        <div class="kv-value">{{ air_quality.monitor_name }}, {{ air_quality.monitor_distance_mi }} mi</div>
+        <div class="kv-label">Nearest Monitor</div>
+        <div class="kv-value">{{ air_quality.monitor_name }}{% if air_quality.monitor_id %} ({{ air_quality.monitor_id }}){% endif %}</div>
       </div>
       <div class="kv-row">
         <div class="kv-label">Data Year</div>
@@ -354,7 +350,8 @@
     <div class="inline-disclaimer">
       EPA AQS data typically lags 6–18 months from current conditions and is measured at fixed
       monitoring stations that may not reflect site-level air quality. This is not a real-time
-      air quality index. No health assessment is made or implied. Source: EPA Air Quality System.
+      air quality index. No health assessment is made or implied. Source: EPA Air Quality System
+      (<a href="https://www.epa.gov/aqs" style="color:#336;">epa.gov/aqs</a>).
     </div>
   </div>
   {% endif %}
@@ -702,43 +699,55 @@
         <tbody>
           <tr>
             <td class="row-label">GHI</td>
-            {% for v in solar.ghi_monthly %}<td>{{ "%.2f"|format(v) }}</td>{% endfor %}
+            {% for v in solar.ghi_monthly %}<td>{% if v is not none %}{{ "%.2f"|format(v) }}{% else %}—{% endif %}</td>{% endfor %}
           </tr>
           <tr>
-            <td class="row-label">Sunrise</td>
+            <td class="row-label">Sunrise{% if solar.tz_abbrev %} ({{ solar.tz_abbrev }}){% endif %}</td>
             {% for v in solar.sunrise %}<td>{{ v }}</td>{% endfor %}
           </tr>
           <tr>
-            <td class="row-label">Sunset</td>
+            <td class="row-label">Sunset{% if solar.tz_abbrev %} ({{ solar.tz_abbrev }}){% endif %}</td>
             {% for v in solar.sunset %}<td>{{ v }}</td>{% endfor %}
+          </tr>
+          <tr>
+            <td class="row-label">Day Length</td>
+            {% for v in solar.day_length %}<td>{{ v }}</td>{% endfor %}
           </tr>
         </tbody>
       </table>
     </div>
-    <div class="col">
-      {% if maps and maps.solar %}
-      <div style="height:2.8in;overflow:hidden;position:relative;">
-        <img src="{{ maps.solar }}" alt="Solar resource map" style="width:100%;height:100%;object-fit:cover;">
-        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
-      </div>
-      {% else %}
-      <div class="map-placeholder" style="height:2.8in;">
-        <div class="map-placeholder-inner">
-          [Solar Resource Map<br>Annual GHI Raster<br>© Mapbox © OpenStreetMap contributors]
-        </div>
-        <div class="map-attribution">© Mapbox © OpenStreetMap contributors</div>
-      </div>
-      {% endif %}
-    </div>
   </div>
 
   <div class="inline-disclaimer">
-    Solar resource values are long-term climatological averages (NASA POWER, 2001–2020)
-    at the grid cell containing this location (≈0.5° resolution). They represent
-    horizontal surface irradiance and do not account for shading, panel tilt,
-    azimuth, or system losses. No energy production estimate is made or implied.
+    <strong>GHI (Global Horizontal Irradiance)</strong> is the total amount of solar radiation
+    received on a horizontal surface, combining direct sunlight, diffuse sky radiation, and
+    ground-reflected radiation. It is the standard measure of a location's solar energy potential.
+    Values shown are long-term climatological averages (NASA POWER, 2001–2020)
+    at the grid cell containing this location (≈0.5° resolution). They do not account for
+    shading, panel tilt, azimuth, or system losses. No energy production estimate is made or implied.
     Source: <a href="https://power.larc.nasa.gov/">NASA POWER (https://power.larc.nasa.gov/)</a>, accessed {{ report_date }}.
   </div>
+
+  {% if solar.sun_path_chart or solar.altitude_chart %}
+  <table style="width:100%; margin-top:8pt; border-collapse:collapse;">
+    <tr>
+      <td style="width:50%; text-align:center; padding:0 6pt 0 0; vertical-align:top;">
+        {% if solar.sun_path_chart %}
+        <img src="{{ solar.sun_path_chart }}" alt="Sun path diagram" style="width:100%;">
+        {% endif %}
+      </td>
+      <td style="width:50%; text-align:center; padding:0 0 0 6pt; vertical-align:top;">
+        {% if solar.altitude_chart %}
+        <img src="{{ solar.altitude_chart }}" alt="Solar altitude chart" style="width:100%;">
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+  <p style="font-size:6.5pt; color:#777; text-align:center; margin-top:2pt;">
+    Times shown in local clock time{% if solar.tz_abbrev %} ({{ solar.tz_abbrev }}){% endif %}.
+    Daylight saving shifts are reflected in the plotted positions.
+  </p>
+  {% endif %}
 </div>
 
 
@@ -750,6 +759,25 @@
     <div class="section-label">Section 6</div>
     <h2>Demographic &amp; Market Context</h2>
   </div>
+
+  {% if maps and (maps.demographics or maps.demographics_closeup) %}
+  <div style="display:table;width:100%;margin-bottom:8pt;">
+    {% if maps.demographics %}
+    <div style="display:table-cell;width:50%;text-align:center;vertical-align:top;padding-right:6pt;">
+      <img src="{{ maps.demographics }}" alt="Demographics radius map – 10 mile"
+           style="width:100%;object-fit:contain;">
+      <div style="font-size:6pt;color:#999;text-align:right;">© Mapbox © OpenStreetMap</div>
+    </div>
+    {% endif %}
+    {% if maps.demographics_closeup %}
+    <div style="display:table-cell;width:50%;text-align:center;vertical-align:top;padding-left:6pt;">
+      <img src="{{ maps.demographics_closeup }}" alt="Demographics radius map – 5 mile"
+           style="width:100%;object-fit:contain;">
+      <div style="font-size:6pt;color:#999;text-align:right;">© Mapbox © OpenStreetMap</div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <p style="font-size:8pt;color:#444;margin-bottom:10pt;">
     {{ demographics.note }}
@@ -922,7 +950,7 @@
 
   <h3>No Risk Rating System</h3>
   <p>
-    This report does not employ any color-coded risk rating, composite suitability score,
+    This report does not employ any composite suitability score,
     or editorial judgment about site quality. All values are raw source data.
     FEMA National Risk Index scores are reproduced verbatim from FEMA's published model
     and are explicitly attributed to FEMA (see Section 2).
@@ -945,7 +973,7 @@
 
   <div style="margin-top:24pt;padding:12pt;border:0.5pt solid #ddd;text-align:center;font-size:8pt;color:#666;">
     <p style="margin:0 0 4pt;"><strong>Plinth Site Intelligence</strong></p>
-    <p style="margin:0;">site-intelligence.com &nbsp;·&nbsp; Report ID: {{ report_id }}</p>
+    <p style="margin:0;">Report ID: {{ report_id }}</p>
     <p style="margin:4pt 0 0;font-size:7pt;">
       This is a demonstration report. All values are illustrative. Do not rely on this report
       for any purpose.

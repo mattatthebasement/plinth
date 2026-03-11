@@ -10,7 +10,7 @@ import httpx
 from plinth.config import get_settings
 from plinth.db.cache import get_cached, set_cached
 
-_BASE = "https://aqs.epa.gov/aqsweb/documents/data_api"
+_BASE = "https://aqs.epa.gov/data/api"
 _DATASET = "epa-aqs"
 _TTL_DAYS = 365
 _NO_MONITOR_RADIUS_MI = 50
@@ -111,7 +111,7 @@ def _fetch_pollutant(
     best = max(monitors, key=lambda m: m.get("observation_count", 0))
     return {
         "available": True,
-        "monitor_name": best.get("site_name"),
+        "monitor_name": best.get("local_site_name") or best.get("site_name"),
         "monitor_id": f"{best.get('state_code')}-{best.get('county_code')}-{best.get('site_number')}",
         "arithmetic_mean": best.get("arithmetic_mean"),
         "units": best.get("units_of_measure"),

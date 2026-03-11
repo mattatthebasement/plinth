@@ -5,22 +5,28 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import math
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.ticker as mticker
 import numpy as np
+from timezonefinder import TimezoneFinder
 
-from astral import LocationInfo
-from astral.sun import sun
+from astral import LocationInfo, Observer
+from astral.sun import sun, sunrise as astral_sunrise, sunset as astral_sunset, azimuth, elevation
 
 from plinth import query as q_module
 
 log = logging.getLogger(__name__)
+
+_TF = TimezoneFinder()
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -99,19 +105,183 @@ def _compute_freeze_thaw_days(
     return total
 
 
-def _sunrise_sunset(lat: float, lon: float) -> tuple[list[str], list[str]]:
-    """Compute sunrise/sunset strings for the 15th of each month."""
-    location = LocationInfo(latitude=lat, longitude=lon)
-    sunrises, sunsets = [], []
+def _get_local_tz(lat: float, lon: float) -> ZoneInfo:
+    """Return the IANA timezone for a lat/lon, falling back to UTC offset."""
+    tz_name = _TF.timezone_at(lat=lat, lng=lon)
+    if tz_name:
+        return ZoneInfo(tz_name)
+    # Fallback: crude UTC offset from longitude
+    offset_hours = round(lon / 15.0)
+    return timezone(timedelta(hours=offset_hours))
+
+
+def _compact_time(dt) -> str:
+    """Format a datetime as '7:34a' or '5:32p' — compact AM/PM."""
+    raw = dt.strftime("%-I:%M%p")  # e.g. "7:34AM"
+    return raw[:-1].lower()  # "7:34a"
+
+
+def _sunrise_sunset(lat: float, lon: float) -> tuple[list[str], list[str], list[str], str]:
+    """Compute sunrise/sunset strings for the 15th of each month in local time.
+
+    Returns (sunrises, sunsets, day_lengths, tz_abbrev).
+    """
+    local_tz = _get_local_tz(lat, lon)
+    obs = Observer(latitude=lat, longitude=lon)
+    sunrises, sunsets, day_lengths = [], [], []
+    tz_abbrevs: set[str] = set()
     for month in range(1, 13):
         try:
-            s = sun(location.observer, date=date(2025, month, 15))
-            sunrises.append(s["sunrise"].strftime("%-I:%M"))
-            sunsets.append(s["sunset"].strftime("%-I:%M"))
+            sr = astral_sunrise(obs, date=date(2025, month, 15)).astimezone(local_tz)
+            ss = astral_sunset(obs, date=date(2025, month, 15)).astimezone(local_tz)
+            sunrises.append(_compact_time(sr))
+            sunsets.append(_compact_time(ss))
+            # Use time-of-day only (astral may return previous day's sunset)
+            day_min = (ss.hour * 60 + ss.minute) - (sr.hour * 60 + sr.minute)
+            day_lengths.append(f"{day_min // 60}:{day_min % 60:02d}")
+            tz_abbrevs.add(sr.strftime("%Z"))
         except Exception:
             sunrises.append("")
             sunsets.append("")
-    return sunrises, sunsets
+            day_lengths.append("")
+    # Join abbreviations in a stable order (standard before daylight)
+    tz_abbrev = "/".join(sorted(tz_abbrevs))
+    return sunrises, sunsets, day_lengths, tz_abbrev
+
+
+# ── Solar chart generation ───────────────────────────────────────────────────
+
+# Representative dates: 21st of solstice/equinox months + a few intermediates
+_SUN_PATH_DATES = [
+    (date(2025, 6, 21), "Jun 21", "#d32f2f"),    # summer solstice
+    (date(2025, 3, 20), "Mar 20", "#1976d2"),     # spring equinox
+    (date(2025, 12, 21), "Dec 21", "#388e3c"),    # winter solstice
+]
+
+
+def _sun_path_polar_chart(lat: float, lon: float) -> str | None:
+    """Generate a polar sun path diagram. Returns base64 PNG data URI."""
+    local_tz = _get_local_tz(lat, lon)
+    obs = Observer(latitude=lat, longitude=lon)
+
+    fig, ax = plt.subplots(figsize=(2.8, 2.8), subplot_kw={"projection": "polar"})
+
+    # Polar setup: 0° = North at top, clockwise azimuth
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+
+    # Radial axis = zenith angle (90 - altitude) so horizon is outer ring
+    ax.set_rlim(0, 90)
+    ax.set_yticks([0, 15, 30, 45, 60, 75, 90])
+    ax.set_yticklabels(["90°", "75°", "60°", "45°", "30°", "15°", "0°"], fontsize=5, color="#666")
+    ax.set_xticks(np.radians([0, 45, 90, 135, 180, 225, 270, 315]))
+    ax.set_xticklabels(["N", "NE", "E", "SE", "S", "SW", "W", "NW"], fontsize=6, color="#444")
+    ax.grid(True, linewidth=0.3, color="#ccc")
+
+    for dt_date, label, color in _SUN_PATH_DATES:
+        azimuths = []
+        zenith_angles = []
+
+        # Compute sun position every 10 minutes through the day
+        start = datetime(dt_date.year, dt_date.month, dt_date.day, 0, 0, tzinfo=local_tz)
+        for minutes in range(0, 24 * 60, 10):
+            dt = start + timedelta(minutes=minutes)
+            dt_utc = dt.astimezone(timezone.utc)
+            try:
+                alt = elevation(obs, dt_utc)
+                az = azimuth(obs, dt_utc)
+            except Exception:
+                continue
+            if alt > 0:
+                azimuths.append(math.radians(az))
+                zenith_angles.append(90 - alt)
+
+        if azimuths:
+            ax.plot(azimuths, zenith_angles, color=color, linewidth=1.2, label=label)
+
+    # Hour markers and labels on all three curves
+    for dt_date, _, color in _SUN_PATH_DATES:
+        start = datetime(dt_date.year, dt_date.month, dt_date.day, 0, 0, tzinfo=local_tz)
+        for hour in range(5, 21):
+            dt = start + timedelta(hours=hour)
+            dt_utc = dt.astimezone(timezone.utc)
+            try:
+                alt = elevation(obs, dt_utc)
+                az = azimuth(obs, dt_utc)
+            except Exception:
+                continue
+            if alt > 0:
+                ax.plot(math.radians(az), 90 - alt, "o", color=color, markersize=2)
+                if hour in (6, 8, 10, 12, 14, 16, 18, 20):
+                    local_hr = dt.strftime("%-I%p").lower()
+                    ax.annotate(
+                        local_hr, (math.radians(az), 90 - alt),
+                        fontsize=4.5, color="#555", ha="center", va="bottom",
+                        xytext=(0, 3), textcoords="offset points",
+                    )
+
+    ax.legend(loc="upper right", fontsize=5.5, framealpha=0.9,
+              bbox_to_anchor=(1.28, 1.08))
+    ax.set_title("Sun Path Diagram", fontsize=7, pad=10, color="#333")
+
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return "data:image/png;base64," + base64.b64encode(buf.read()).decode("ascii")
+
+
+def _solar_altitude_chart(lat: float, lon: float) -> str | None:
+    """Generate a solar altitude (elevation vs time) chart. Returns base64 PNG data URI."""
+    local_tz = _get_local_tz(lat, lon)
+    obs = Observer(latitude=lat, longitude=lon)
+
+    fig, ax = plt.subplots(figsize=(2.8, 2.8))
+
+    for dt_date, label, color in _SUN_PATH_DATES:
+        hours = []
+        altitudes = []
+
+        start = datetime(dt_date.year, dt_date.month, dt_date.day, 0, 0, tzinfo=local_tz)
+        for minutes in range(0, 24 * 60, 10):
+            dt = start + timedelta(minutes=minutes)
+            dt_utc = dt.astimezone(timezone.utc)
+            try:
+                alt = elevation(obs, dt_utc)
+            except Exception:
+                continue
+            if alt > -5:  # include a bit below horizon for context
+                hours.append(dt.hour + dt.minute / 60.0)
+                altitudes.append(max(alt, 0))
+
+        if hours:
+            ax.plot(hours, altitudes, color=color, linewidth=1.2, label=label)
+
+    ax.axhline(y=0, color="#999", linewidth=0.5)
+    ax.set_xlim(4, 22)
+    ax.set_ylim(0, 90)
+    ax.set_xlabel("Local Time", fontsize=6, color="#555")
+    ax.set_ylabel("Solar Altitude (°)", fontsize=6, color="#555")
+    ax.set_title("Solar Altitude", fontsize=7, color="#333")
+
+    # Format x axis as hours
+    ax.set_xticks([4, 6, 8, 10, 12, 14, 16, 18, 20])
+    ax.set_xticklabels(["4am", "6am", "8am", "10am", "12pm", "2pm", "4pm", "6pm", "8pm"],
+                        fontsize=5, rotation=45)
+    ax.tick_params(axis="y", labelsize=5.5)
+    ax.yaxis.set_major_locator(mticker.MultipleLocator(15))
+    ax.grid(True, linewidth=0.3, color="#ddd")
+    ax.legend(loc="upper right", fontsize=5.5, framealpha=0.9)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    plt.tight_layout(pad=0.3)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return "data:image/png;base64," + base64.b64encode(buf.read()).decode("ascii")
 
 
 def _safe_query(name: str, fn, *args, fallback: dict, **kwargs) -> dict:
@@ -230,13 +400,16 @@ def _build_air_quality(aqs_q: dict) -> dict:
         "year": aqs_q.get("year"),
     }
     if pm25.get("available"):
-        result["pm25_annual"] = pm25.get("arithmetic_mean")
-        result["monitor_name"] = pm25.get("monitor_name")
-        result["monitor_distance_mi"] = None  # AQS doesn't return distance
+        result["pm25_annual"] = round(pm25.get("arithmetic_mean", 0), 1)
+        result["monitor_name"] = pm25.get("monitor_name", "—")
+        result["monitor_id"] = pm25.get("monitor_id")
     if ozone.get("available"):
-        result["ozone_ppb"] = ozone.get("arithmetic_mean")
-        if "monitor_name" not in result:
-            result["monitor_name"] = ozone.get("monitor_name")
+        # API returns ppm; convert to ppb for display
+        mean_ppm = ozone.get("arithmetic_mean", 0)
+        result["ozone_ppb"] = round(mean_ppm * 1000, 1)
+        if not result.get("monitor_name"):
+            result["monitor_name"] = ozone.get("monitor_name", "—")
+        result["ozone_monitor_id"] = ozone.get("monitor_id")
     return result
 
 
@@ -453,7 +626,11 @@ def _build_climate(noaa_q: dict, nasa_q: dict) -> dict:
 
 
 def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
-    sunrises, sunsets = _sunrise_sunset(lat, lon)
+    sunrises, sunsets, day_lengths, tz_abbrev = _sunrise_sunset(lat, lon)
+
+    # Generate sun path charts
+    sun_path_chart = _sun_path_polar_chart(lat, lon)
+    altitude_chart = _solar_altitude_chart(lat, lon)
 
     if not nasa_q.get("available", False):
         return {
@@ -463,7 +640,11 @@ def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
             "months": _MONTHS,
             "sunrise": sunrises,
             "sunset": sunsets,
+            "day_length": day_lengths,
+            "tz_abbrev": tz_abbrev,
             "ghi_monthly": [None] * 12,
+            "sun_path_chart": sun_path_chart,
+            "altitude_chart": altitude_chart,
         }
 
     solar = nasa_q.get("solar_kwh_m2_day", {})
@@ -477,7 +658,11 @@ def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
         "months": _MONTHS,
         "sunrise": sunrises,
         "sunset": sunsets,
+        "day_length": day_lengths,
+        "tz_abbrev": tz_abbrev,
         "ghi_monthly": monthly_ghi,
+        "sun_path_chart": sun_path_chart,
+        "altitude_chart": altitude_chart,
     }
 
 
@@ -609,7 +794,7 @@ def _build_risk_summary(
         if pm25 is not None:
             rows.append({
                 "category": "Air Quality",
-                "value": f"PM\u2082.\u2085 {pm25:.1f} \u00b5g/m\u00b3 (NAAQS: 9.0)",
+                "value": f"PM\u2082.\u2085 {pm25:.1f} \u00b5g/m\u00b3 (NAAQS: 9.0) · O\u2083 {air_quality.get('ozone_ppb', 'N/A')} ppb (NAAQS: 70)",
                 "source": f"EPA AQS {air_quality.get('year', '')}",
             })
 
@@ -741,11 +926,13 @@ def build_context(
 
     # ── Maps ──────────────────────────────────────────────────────────────
     try:
-        from plinth.report.maps import fetch_all_maps
+        from plinth.report.maps import fetch_all_maps, fetch_demographics_map_b64, fetch_demographics_closeup_map_b64
         maps = fetch_all_maps(lat, lon)
+        maps["demographics"] = fetch_demographics_map_b64(lat, lon)
+        maps["demographics_closeup"] = fetch_demographics_closeup_map_b64(lat, lon)
     except Exception as exc:
         log.warning("Map fetch failed: %s", exc)
-        maps = {"cover": None, "terrain": None, "solar": None}
+        maps = {"cover": None, "terrain": None, "solar": None, "demographics": None}
 
     # Strip internal key before returning
     demographics.pop("_aggs", None)
