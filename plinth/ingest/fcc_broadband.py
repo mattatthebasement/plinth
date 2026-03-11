@@ -34,9 +34,6 @@ _BASE = "https://bdc.fcc.gov/api/public/map"
 # Technology codes to SKIP — satellite (universally available, handled separately)
 _SKIP_TECH_CODES = {"60", "61"}
 
-# Only load residential and mixed-use locations (skip business-only rows)
-_RESIDENTIAL_CODES = {"R", "X"}
-
 # Batch size for database inserts
 _BATCH_SIZE = 5000
 
@@ -49,8 +46,8 @@ class FccBroadbandIngestor(BaseIngestor):
     each technology-type ZIP, parses the CSV, and bulk-upserts into
     ``fcc_broadband_coverage``.
 
-    Satellite technologies (60/61) are excluded; only residential/mixed
-    business_residential_code rows are loaded.
+    All business_residential_code values (R=Residential, B=Business, X=Both)
+    are loaded. Satellite technologies (60/61) are excluded.
     """
 
     source_name = "fcc-broadband"
@@ -201,7 +198,7 @@ class FccBroadbandIngestor(BaseIngestor):
             coverage_region="Oklahoma (Fixed Broadband, residential/mixed, excl. satellite)",
             notes=(
                 f"FCC BDC State/Location Coverage. As-of date: {self._as_of_date}. "
-                f"{self._total_rows:,} rows loaded. "
+                f"{self._total_rows:,} rows loaded (R+B+X). "
                 "Satellite (GSO/NGSO) excluded — universally available, noted separately in reports."
             ),
         )
@@ -262,13 +259,10 @@ class FccBroadbandIngestor(BaseIngestor):
         with get_connection() as conn:
             with conn.cursor() as cur:
                 for row in reader:
-                    brc = row.get("business_residential_code", "")
-                    if brc not in _RESIDENTIAL_CODES:
-                        continue
                     tech_code = row.get("technology", "")
                     if tech_code in _SKIP_TECH_CODES:
                         continue
-
+                    brc = row.get("business_residential_code", "")
                     batch.append((
                         int(row["location_id"]),
                         row["provider_id"],

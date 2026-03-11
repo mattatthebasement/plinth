@@ -333,7 +333,7 @@ Table fcc_broadband_coverage {
   max_download_mbps        integer
   max_upload_mbps          integer
   low_latency              boolean
-  business_residential_code text   [note: 'R=Residential, X=Both (B=Business excluded)']
+  business_residential_code text   [note: 'R=Residential, B=Business, X=Both']
   block_geoid              text    [not null, note: '15-digit census block GEOID; LEFT(block_geoid,12) = block group GEOID']
   state_fips               text    [not null, note: '2-digit state FIPS']
   as_of_date               date    [not null, note: 'FCC filing period date (e.g. 2025-06-30)']
@@ -345,7 +345,7 @@ Table fcc_broadband_coverage {
     state_fips  [name: 'fcc_broadband_coverage_state_fips_idx']
   }
 
-  Note: 'FCC BDC State/Location Coverage — Fixed Broadband (residential/mixed). Source: bdc.fcc.gov Public Data API. Semi-annual refresh. Spatial lookup: ST_Contains on census_block_groups → LEFT(block_geoid,12) join. Satellite (GSO/NGSO) excluded.'
+  Note: 'FCC BDC State/Location Coverage — Fixed Broadband (R+B+X; all service types). Source: bdc.fcc.gov Public Data API. Semi-annual refresh. Spatial lookup: ST_Contains on census_block_groups → LEFT(block_geoid,12) join. Satellite (GSO/NGSO) excluded.'
 }
 
 // ─── Cross-table references ───────────────────────────────────────────────────
