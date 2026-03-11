@@ -174,6 +174,18 @@ def ingest_epa_aqs_bulk(years: int) -> None:
     EpaAqsBulkIngestor(years=years).run()
 
 
+@ingest.command("nasa-power-bulk")
+def ingest_nasa_power_bulk() -> None:
+    """Bulk-ingest NASA POWER 20-year monthly climatology for NE Oklahoma.
+
+    Makes 15 regional API calls (one per parameter) covering the NE Oklahoma
+    bounding box. Responses are cached in staging so subsequent runs are free.
+    """
+    from plinth.ingest.nasa_power_bulk import NasaPowerBulkIngestor
+
+    NasaPowerBulkIngestor().run()
+
+
 def _require_ingestor(name: str) -> None:
     """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
     click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
