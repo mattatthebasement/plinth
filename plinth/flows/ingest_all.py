@@ -87,6 +87,50 @@ def raster_index() -> str:
     return "raster-index"
 
 
+# ── Migration 007: bulk / API-to-local ingestors ──────────────────────────────
+
+@task(name="ingest-census-acs-bulk", retries=1)
+def ingest_census_acs_bulk_task(year: int = 2023) -> str:
+    from plinth.ingest.census_acs_bulk import CensusAcsBulkIngestor
+    CensusAcsBulkIngestor(year=year).run()
+    return "census-acs-bulk"
+
+
+@task(name="ingest-epa-aqs-bulk", retries=1)
+def ingest_epa_aqs_bulk_task(years: int = 5) -> str:
+    from plinth.ingest.epa_aqs_bulk import EpaAqsBulkIngestor
+    EpaAqsBulkIngestor(years=years).run()
+    return "epa-aqs-bulk"
+
+
+@task(name="ingest-nasa-power-bulk", retries=1)
+def ingest_nasa_power_bulk_task() -> str:
+    from plinth.ingest.nasa_power_bulk import NasaPowerBulkIngestor
+    NasaPowerBulkIngestor().run()
+    return "nasa-power-bulk"
+
+
+@task(name="ingest-usgs-earthquakes-bulk", retries=1)
+def ingest_usgs_earthquakes_bulk_task() -> str:
+    from plinth.ingest.usgs_earthquakes_bulk import UsgsEarthquakesBulkIngestor
+    UsgsEarthquakesBulkIngestor().run()
+    return "usgs-earthquakes-bulk"
+
+
+@task(name="ingest-usda-whp-raster", retries=1)
+def ingest_usda_whp_raster_task(region: str) -> str:
+    from plinth.ingest.usda_whp_raster import UsdaWhpRasterIngestor
+    UsdaWhpRasterIngestor().run(region)
+    return "usda-whp-raster"
+
+
+@task(name="ingest-usgs-seismic-raster", retries=1)
+def ingest_usgs_seismic_raster_task(region: str) -> str:
+    from plinth.ingest.usgs_seismic_raster import UsgsSeismicRasterIngestor
+    UsgsSeismicRasterIngestor().run(region)
+    return "usgs-seismic-raster"
+
+
 @flow(name="ingest-all-regional", log_prints=True)
 def ingest_all_regional(region: str = "ne-oklahoma") -> None:
     """Run the full ingestion pipeline for a region.
@@ -111,7 +155,18 @@ def ingest_all_regional(region: str = "ne-oklahoma") -> None:
     ingest_usgs_3dep(region)
     ingest_nlcd(region)
 
-    # Re-index rasters after upload
+    # Re-index rasters after Phase 3 uploads
+    raster_index()
+
+    # Migration 007: bulk / API-to-local ingestors (no inter-dependencies with Phase 2/3)
+    ingest_census_acs_bulk_task()
+    ingest_epa_aqs_bulk_task()
+    ingest_nasa_power_bulk_task()
+    ingest_usgs_earthquakes_bulk_task()
+    ingest_usda_whp_raster_task(region)
+    ingest_usgs_seismic_raster_task(region)   # slow: ~60 min per region
+
+    # Re-index rasters again after WHP + seismic uploads
     raster_index()
 
     logger.info(f"Full ingestion complete for region: {region}")

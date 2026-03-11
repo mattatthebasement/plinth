@@ -100,7 +100,7 @@ Table census_block_groups {
     (statefp, countyfp) [name: 'census_block_groups_county_idx']
   }
 
-  Note: 'Census TIGER/Line 2023 block-group geometries for Oklahoma. ACS demographic values are NOT stored here — they are fetched at query time via the Census API and cached in query_cache.'
+  Note: 'Census TIGER/Line 2023 block-group geometries for Oklahoma. ACS demographic values are stored in acs_block_group_data (migration 007) and looked up locally at query time — no Census API key required.'
 }
 
 Table census_tracts {
@@ -117,7 +117,7 @@ Table census_tracts {
     (statefp, countyfp) [name: 'census_tracts_county_idx']
   }
 
-  Note: 'Census TIGER/Line 2023 tract geometries. ACS values fetched at query time via Census API.'
+  Note: 'Census TIGER/Line 2023 tract geometries. ACS values looked up locally via acs_block_group_data (no Census API).'
 }
 
 Table fema_flood_zones {
@@ -352,3 +352,186 @@ Table fcc_broadband_coverage {
 
 Ref: fema_nri.tract_id - census_tracts.geoid
 Ref: fema_flood_zones.county_fips > fema_unmapped_areas.county_fips
+
+// ─── Migration 007: API-to-Local Bulk Storage ─────────────────────────────────
+// These tables replace seven runtime API dependencies with locally-ingested data.
+// USDA WHP and USGS Seismic rasters are COGs in MinIO; indexed via raster_tiles.
+
+Table acs_block_group_data {
+  geoid    char(12) [not null, note: '12-digit block group GEOID (state+county+tract+bg)']
+  acs_year smallint [not null, note: 'ACS 5-year vintage end year (e.g. 2023 = 2019-2023)']
+
+  // Population & Age (B01001, B01002, B01003)
+  total_population   numeric
+  median_age         numeric
+  median_age_male    numeric
+  median_age_female  numeric
+  avg_household_size numeric
+  male_total         numeric
+  female_total       numeric
+  // ... plus 22 male age brackets, 22 female age brackets (m_under5 … m_85plus, f_under5 … f_85plus)
+  // ... Households & Income (B11001, B19013, B19301, C17002, B19057)
+  total_households        numeric
+  median_hhi              numeric
+  per_capita_income       numeric
+  poverty_universe        numeric
+  poverty_under_050       numeric
+  poverty_050_099         numeric
+  public_assistance_count numeric
+  // ... Housing (B25001, B25077, B25064, B25002, B25035)
+  total_housing_units  numeric
+  median_home_value    numeric
+  median_gross_rent    numeric
+  vacant_units         numeric
+  median_year_built    numeric
+  owner_occupied       numeric
+  renter_occupied      numeric
+  // ... Education (B15003), Commute (B08303, B08301), Employment (B23025)
+  // ... Occupation (C24010), Industry (C24030), Race (B03002), Language (C16002)
+  // All 148 ACS estimate variables stored with corresponding _moe columns (296 total).
+
+  indexes {
+    (geoid, acs_year) [pk]
+    geoid [name: 'acs_bg_data_geoid_idx']
+  }
+
+  Note: '''
+    Census ACS 5-Year Estimates — all US block groups (~242k), loaded from
+    pre-built Summary File .dat archives (no API key required).
+    296 columns total: 148 estimate variables + 148 MOE columns.
+    Refreshed annually via ingest-census-acs-bulk.
+    Cross-references census_block_groups.geoid for geometry.
+  '''
+}
+
+Table epa_aqs_sites {
+  site_id         text    [pk, note: 'state_code || county_code || site_num (9 chars)']
+  state_code      text
+  county_code     text
+  site_num        text
+  local_site_name text
+  address         text
+  city            text
+  county_name     text
+  state_name      text
+  latitude        numeric
+  longitude       numeric
+  geom            geometry(Point, 4326) [not null]
+
+  indexes {
+    geom [type: gist, name: 'epa_aqs_sites_geom_idx']
+  }
+
+  Note: 'EPA AQS monitoring site registry. Derived from the annual summary CSV headers. Spatial index enables ST_DWithin nearest-monitor lookup.'
+}
+
+Table epa_aqs_annual_summary {
+  id                     bigserial [pk]
+  site_id                text      [not null, ref: > epa_aqs_sites.site_id]
+  year                   smallint  [not null]
+  parameter_code         text      [not null]
+  parameter_name         text
+  pollutant_standard     text
+  units                  text
+  arithmetic_mean        numeric
+  first_max_value        numeric
+  first_max_hour         integer
+  second_max_value       numeric
+  third_max_value        numeric
+  fourth_max_value       numeric
+  ninety_eighth_pctile   numeric
+  ninety_ninth_pctile    numeric
+  aqi                    integer
+  method_code            text
+  method_name            text
+  observation_count      integer
+  observation_percent    numeric
+  valid_day_count        integer
+  required_day_count     integer
+  exceptional_data_count integer
+
+  indexes {
+    (site_id, year, parameter_code, pollutant_standard) [unique, name: 'epa_aqs_summary_unique']
+    (site_id, year) [name: 'epa_aqs_summary_site_year_idx']
+    (parameter_code, year) [name: 'epa_aqs_summary_param_idx']
+  }
+
+  Note: 'EPA AQS annual pollutant summary. One row per site × year × parameter × pollutant standard. Loaded from pre-built annual_conc_by_monitor_YYYY.zip (no API key). 5 years loaded (~297k rows). Refreshed annually.'
+}
+
+Table fcc_broadband_availability {
+  id                        bigserial [pk]
+  location_id               bigint    [not null, note: 'FCC fabric location_id']
+  frn                       text      [note: 'FCC Registration Number (provider)']
+  provider_id               text
+  brand_name                text
+  technology_code           smallint  [note: '10=Copper, 40=Cable, 50=Fiber, 70/71/72=Fixed Wireless']
+  max_download_speed        integer   [note: 'Mbps']
+  max_upload_speed          integer   [note: 'Mbps']
+  low_latency               boolean
+  business_residential_code char(1)   [note: 'R=Residential, X=Both']
+  state_usps                text
+  county_geoid              text
+  block_geoid               text      [note: '15-digit census block GEOID']
+  h3_res8_id                text
+  geom                      geometry(Point, 4326)
+
+  indexes {
+    geom        [type: gist, name: 'fcc_broadband_geom_idx']
+    location_id [name: 'fcc_broadband_location_idx']
+    county_geoid [name: 'fcc_broadband_county_idx']
+    block_geoid [name: 'fcc_broadband_block_idx']
+  }
+
+  Note: 'FCC BDC fixed broadband availability by location (bulk table, migration 007). Currently unpopulated — all FCC BDC data download endpoints return HTTP 405. Distinct from fcc_broadband_coverage which was the original API-based design.'
+}
+
+Table nasa_power_climatology {
+  grid_lat           numeric(5,2) [not null, note: 'SW corner of 0.5° POWER grid cell']
+  grid_lon           numeric(6,2) [not null, note: 'SW corner of 0.625° POWER grid cell']
+  month              smallint     [not null, note: '0=annual average, 1–12=monthly climatology']
+  t2m_mean_c         numeric      [note: 'Air temperature at 2m mean (°C)']
+  t2m_max_c          numeric      [note: 'Air temperature at 2m max (°C)']
+  t2m_min_c          numeric      [note: 'Air temperature at 2m min (°C)']
+  t2mdew_c           numeric      [note: 'Dew point at 2m (°C)']
+  t2mwet_c           numeric      [note: 'Wet bulb temperature at 2m (°C)']
+  rh2m_pct           numeric      [note: 'Relative humidity at 2m (%)']
+  prectotcorr_mm_day numeric      [note: 'Precipitation corrected (mm/day)']
+  ws10m_m_s          numeric      [note: 'Wind speed at 10m (m/s)']
+  ws50m_m_s          numeric      [note: 'Wind speed at 50m (m/s)']
+  allsky_sfc_sw_dwn  numeric      [note: 'All-sky surface shortwave irradiance (kWh/m²/day)']
+  allsky_kt          numeric      [note: 'All-sky insolation clearness index']
+  clrsky_sfc_sw_dwn  numeric      [note: 'Clear-sky surface shortwave irradiance (kWh/m²/day)']
+  allsky_sfc_lw_dwn  numeric      [note: 'All-sky surface longwave irradiance (kWh/m²/day)']
+  hdd18_3            numeric      [note: 'Heating degree days (base 18.3°C)']
+  cdd18_3            numeric      [note: 'Cooling degree days (base 18.3°C)']
+
+  indexes {
+    (grid_lat, grid_lon, month) [pk]
+  }
+
+  Note: '20-year monthly climatology from NASA POWER MERRA-2/CERES SYN1deg. Grid: 0.5° lat × 0.625° lon. month=0 is annual average. 13 rows per grid cell (annual + 12 months). Loaded from NASA POWER Regional API (no API key). ~45 cells for NE Oklahoma.'
+}
+
+Table usgs_earthquake_events {
+  event_id       text        [pk, note: 'USGS ComCat event ID (e.g. "us7000aabc")']
+  occurred_at    timestamptz [not null]
+  magnitude      numeric
+  magnitude_type text
+  depth_km       numeric
+  place          text
+  status         text        [note: '"reviewed" | "automatic"']
+  gap            numeric     [note: 'Azimuthal gap (degrees)']
+  rms            numeric     [note: 'Root-mean-square travel-time residual']
+  nst            integer     [note: 'Number of seismic stations used']
+  url            text
+  geom           geometry(Point, 4326) [not null]
+
+  indexes {
+    geom        [type: gist, name: 'usgs_eq_geom_idx']
+    occurred_at [name: 'usgs_eq_occurred_idx']
+    magnitude   [name: 'usgs_eq_mag_idx']
+  }
+
+  Note: 'USGS ComCat earthquake catalog. M≥2.0 events within NE Oklahoma bounding box +1° buffer. Loaded from USGS FDSN event API (single bulk CSV export). 12,916 events loaded (1918–2026). Queried at report time via ST_DWithin with 80km radius, M≥3.0, last 50 years.'
+}
