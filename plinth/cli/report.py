@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import string
 import sys
+import time
 import urllib.parse
 from pathlib import Path
 
@@ -179,6 +180,44 @@ def _reverse_geocode_census(lat: float, lon: float) -> tuple[str, str]:
     return county, state
 
 
+# ─── Query categories for the timing display ─────────────────────────────────
+_QUERY_GROUPS: list[tuple[str, list[str]]] = [
+    ("Vector queries", ["flood_zone", "fema_nri", "iecc_zone", "census_block_groups", "soil", "hydro", "noaa_normals"]),
+    ("Raster queries", ["elevation", "slope", "land_cover", "seismic_pga", "wildfire_whp"]),
+    ("API queries",    ["nasa_power", "earthquakes", "epa_aqs", "fcc_broadband"]),
+    ("Demographics",   ["demographics"]),
+    ("Maps",           ["maps"]),
+]
+
+
+def _print_timings(timings: dict[str, float], context_elapsed: float, render_elapsed: float) -> None:
+    """Print a timing breakdown table to stderr."""
+    COL = 28
+    click.echo("", err=True)
+    click.echo(f"  {'── Timing breakdown ':─<{COL + 10}}", err=True)
+    total = 0.0
+    for group_label, keys in _QUERY_GROUPS:
+        group_rows = [(k, timings[k]) for k in keys if k in timings]
+        if not group_rows:
+            continue
+        group_total = sum(v for _, v in group_rows)
+        total += group_total
+        click.echo(f"  {group_label}", err=True)
+        for name, elapsed in group_rows:
+            bar = "█" * max(1, round(elapsed * 4))  # 1 block ≈ 250ms
+            click.echo(f"    {name:<{COL}} {elapsed:5.2f}s  {bar}", err=True)
+        click.echo(f"    {'subtotal':<{COL}} {group_total:5.2f}s", err=True)
+        click.echo("", err=True)
+    render_total = render_elapsed
+    total += render_total
+    click.echo(f"  {'PDF render'}", err=True)
+    bar = "█" * max(1, round(render_elapsed * 4))
+    click.echo(f"    {'weasyprint':<{COL}} {render_elapsed:5.2f}s  {bar}", err=True)
+    click.echo("", err=True)
+    click.echo(f"  {'TOTAL':<{COL + 4}} {total:5.2f}s", err=True)
+    click.echo(f"  {'─' * (COL + 10)}", err=True)
+
+
 @click.group()
 def report() -> None:
     """Report generation commands."""
@@ -227,6 +266,7 @@ def generate(address: str | None, lat: float | None, lon: float | None,
         click.echo("Running site queries…")
 
         from plinth.report.context import build_context
+        _t0_context = time.perf_counter()
         try:
             context = build_context(
                 lat=lat,
@@ -239,17 +279,28 @@ def generate(address: str | None, lat: float | None, lon: float | None,
         except Exception as exc:
             click.echo(f"Context build failed: {exc}", err=True)
             sys.exit(1)
+        _context_elapsed = time.perf_counter() - _t0_context
 
         click.echo("Rendering PDF…")
+
+    # Extract timings before rendering (strip internal key from template context)
+    timings: dict[str, float] = context.pop("_timings", {})
+    _context_elapsed = locals().get("_context_elapsed", 0.0)
 
     report_id = context.get("report_id", "PLN-DEMO")
     out_path = Path(output) if output else Path(f"plinth_report_{report_id}.pdf")
 
+    _t0_render = time.perf_counter()
     try:
         pdf_bytes = render_report_pdf(context)
     except Exception as exc:
         click.echo(f"PDF rendering failed: {exc}", err=True)
         raise SystemExit(1) from exc
+    _render_elapsed = time.perf_counter() - _t0_render
 
     out_path.write_bytes(pdf_bytes)
     click.echo(f"PDF written → {out_path}  ({len(pdf_bytes):,} bytes)")
+
+    # ── Timing breakdown ──────────────────────────────────────────────────
+    if timings or _context_elapsed:
+        _print_timings(timings, _context_elapsed, _render_elapsed)

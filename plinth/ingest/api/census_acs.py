@@ -161,6 +161,10 @@ def _parse_geoid(geoid: str) -> tuple[str, str, str, str]:
     return geoid[:2], geoid[2:5], geoid[5:11], geoid[11:12]
 
 
+class _NetworkError(Exception):
+    """Raised when a Census API request fails due to a network/connectivity issue."""
+
+
 def _fetch_block_group(
     state: str,
     county: str,
@@ -169,7 +173,11 @@ def _fetch_block_group(
     api_key: str,
     acs_year: int,
 ) -> dict[str, Any] | None:
-    """Fetch ACS data for a single block group. Returns field dict or None on error."""
+    """Fetch ACS data for a single block group. Returns field dict or None on error.
+
+    Raises _NetworkError on connectivity failures so the caller can fast-fail.
+    Returns None when the API responds but has no usable data for this block group.
+    """
     combined_row: dict[str, str] = {}
     for batch in _VAR_BATCHES:
         get_str = ",".join(batch)
@@ -181,9 +189,12 @@ def _fetch_block_group(
             f"&key={api_key}"
         )
         try:
-            resp = httpx.get(url, timeout=30)
+            resp = httpx.get(url, timeout=8)
             resp.raise_for_status()
             data = resp.json()
+        except (httpx.ConnectError, httpx.TimeoutException, OSError) as exc:
+            log.warning("Census ACS network error for %s%s%s%s: %s", state, county, tract, block_group, exc)
+            raise _NetworkError(str(exc)) from exc
         except Exception as exc:
             log.warning("Census ACS fetch failed for %s%s%s%s: %s", state, county, tract, block_group, exc)
             return None
@@ -215,7 +226,11 @@ def _fetch_with_cache(
     api_key: str,
     acs_year: int,
 ) -> dict[str, Any] | None:
-    """Return ACS field dict for a GEOID, using query_cache."""
+    """Return ACS field dict for a GEOID, using query_cache.
+
+    Raises _NetworkError on connectivity failure (propagated from _fetch_block_group).
+    Returns None when the API has no data for this block group.
+    """
     cache_key = _cache_key(acs_year, geoid)
     cached = get_cached(cache_key)
     if cached is not None:
@@ -769,21 +784,50 @@ def fetch_area_weighted(
         for bg in bg_list:
             all_geoids.add(bg["geoid"])
 
-    # Fetch (with cache) for each unique GEOID
+    # Fetch (with cache) for each unique GEOID.
+    # On the first network error, abort immediately — all remaining uncached
+    # requests will fail the same way, and waiting them out wastes minutes.
     acs_data: dict[str, dict[str, Any]] = {}
+    failed_geoids: list[str] = []
+    network_error: str | None = None
+
     for geoid in all_geoids:
-        result = _fetch_with_cache(geoid, api_key, acs_year)
+        try:
+            result = _fetch_with_cache(geoid, api_key, acs_year)
+        except _NetworkError as exc:
+            network_error = str(exc)
+            log.warning("Census ACS network unreachable — aborting remaining %d fetches", len(all_geoids) - len(acs_data) - 1)
+            # Count all remaining un-fetched GEOIDs as failed
+            failed_geoids = [g for g in all_geoids if g not in acs_data and g != geoid]
+            failed_geoids.insert(0, geoid)
+            break
         if result is not None:
             acs_data[geoid] = result
+        else:
+            failed_geoids.append(geoid)
 
     if not acs_data:
+        flag = (
+            f"Census ACS API unreachable ({network_error})."
+            if network_error
+            else "Census ACS data unavailable for this area."
+        )
         return {
             "available": False,
-            "flag": "Census ACS data unavailable for this area.",
+            "flag": flag,
             "note": "",
             "acs_vintage": "",
             "groups": [],
         }
+
+    # Build a partial-data note if any block groups were excluded
+    partial_note: str = ""
+    if failed_geoids:
+        reason = "network error" if network_error else "API returned no data"
+        partial_note = (
+            f"{len(failed_geoids)} of {len(all_geoids)} block group(s) unavailable ({reason}); "
+            "values are area-weighted estimates from available data only."
+        )
 
     # Aggregate for each radius
     radii_order = ["1mi", "5mi", "10mi"]
@@ -810,6 +854,8 @@ def fetch_area_weighted(
     return {
         "available": True,
         "note": (
+            partial_note
+            if partial_note else
             "Area-weighted block group intersections. "
             "Straight-line radius buffers — physical barriers not accounted for."
         ),

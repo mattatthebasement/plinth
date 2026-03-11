@@ -6,6 +6,7 @@ import base64
 import io
 import logging
 import math
+import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -284,8 +285,9 @@ def _solar_altitude_chart(lat: float, lon: float) -> str | None:
     return "data:image/png;base64," + base64.b64encode(buf.read()).decode("ascii")
 
 
-def _safe_query(name: str, fn, *args, fallback: dict, **kwargs) -> dict:
-    """Call a query function; return fallback dict on any exception."""
+def _safe_query(name: str, fn, *args, fallback: dict, timings: dict | None = None, **kwargs) -> dict:
+    """Call a query function; return fallback dict on any exception. Records elapsed time in timings."""
+    t0 = time.perf_counter()
     try:
         result = fn(*args, **kwargs)
         if result is None:
@@ -295,6 +297,9 @@ def _safe_query(name: str, fn, *args, fallback: dict, **kwargs) -> dict:
     except Exception as exc:
         log.warning("Query %s failed: %s", name, exc)
         return fallback
+    finally:
+        if timings is not None:
+            timings[name] = time.perf_counter() - t0
 
 
 # ── Section builders ─────────────────────────────────────────────────────────
@@ -358,6 +363,24 @@ def _build_wildfire(wf_q: dict) -> dict:
     }
 
 
+_HYDRO_GROUP_LABELS: dict[str, str] = {
+    "A": "A — High infiltration rate; low runoff potential (deep, well-drained sands and gravels)",
+    "B": "B — Moderate infiltration rate; moderately well-drained",
+    "C": "C — Slow infiltration rate; moderately fine to fine texture or impeding layer",
+    "D": "D — Very slow infiltration rate; highest runoff potential (high clay, high water table, or shallow impervious layer)",
+    "C/D": "C/D — Dual class: behaves as Group D when wet; can drain to Group C behavior with drainage improvements",
+    "A/D": "A/D — Dual class: behaves as Group D when wet; drains to Group A behavior",
+    "B/D": "B/D — Dual class: behaves as Group D when wet; drains to Group B behavior",
+}
+
+
+def _fmt_hydro_group(raw: str | None) -> str:
+    """Return the hydrologic group letter(s) with an inline description."""
+    if not raw:
+        return "—"
+    return _HYDRO_GROUP_LABELS.get(raw.strip(), raw.strip())
+
+
 def _fmt_eng_rating(rating: str | None, limiters: list[str]) -> str:
     """Format an engineering suitability rating with optional limiting factors.
 
@@ -380,6 +403,7 @@ def _build_soil(soil_q: dict) -> dict:
             "muname": "",
             "mukey": "",
             "hydrologic_group": "",
+            "hydrologic_group_code": None,
             "drainage_class": "",
             "slope_pct": None,
             "taxonomic_class": "",
@@ -414,7 +438,8 @@ def _build_soil(soil_q: dict) -> dict:
         "muname": soil_q.get("muname", ""),
         "mukey": soil_q.get("mukey", ""),
         # Physical conditions
-        "hydrologic_group": soil_q.get("hydrologic_group", ""),
+        "hydrologic_group": _fmt_hydro_group(soil_q.get("hydrologic_group")),
+        "hydrologic_group_code": (soil_q.get("hydrologic_group") or "").strip() or None,
         "drainage_class": soil_q.get("drainage_class", ""),
         "slope_pct": soil_q.get("slope_pct"),
         "flood_frequency": soil_q.get("flood_frequency"),
@@ -835,7 +860,7 @@ def _build_risk_summary(
 
     # Soil — show unavailable clearly when no data within threshold
     if soil.get("available"):
-        hyd_grp = soil.get("hydrologic_group", "")
+        hyd_grp = soil.get("hydrologic_group_code", "") or ""
         drain = soil.get("drainage_class", "")
         soil_val = f"{hyd_grp} — {drain}" if hyd_grp or drain else "N/A"
     else:
@@ -925,39 +950,41 @@ def build_context(
         report_date = date.today().strftime("%B %-d, %Y")
     report_year = date.today().year
 
+    timings: dict[str, float] = {}
+
     # ── Run all queries ───────────────────────────────────────────────────
     flood_q = _safe_query("flood_zone", q_module.query_flood_zone, lat, lon,
-                          fallback={"available": False, "flag": "Flood zone data unavailable."})
+                          fallback={"available": False, "flag": "Flood zone data unavailable."}, timings=timings)
     fema_nri_q = _safe_query("fema_nri", q_module.query_fema_nri, lat, lon,
-                             fallback={"available": False, "flag": "FEMA NRI data unavailable."})
+                             fallback={"available": False, "flag": "FEMA NRI data unavailable."}, timings=timings)
     iecc_q = _safe_query("iecc_zone", q_module.query_iecc_zone, lat, lon,
-                         fallback={"available": False, "flag": "IECC zone data unavailable."})
+                         fallback={"available": False, "flag": "IECC zone data unavailable."}, timings=timings)
     bg_q = _safe_query("census_block_groups", q_module.query_census_block_groups, lat, lon,
-                       fallback={"available": False, "flag": "Census block group data unavailable."})
+                       fallback={"available": False, "flag": "Census block group data unavailable."}, timings=timings)
     soil_q = _safe_query("soil", q_module.query_soil, lat, lon,
-                         fallback={"available": False, "flag": "Soil data unavailable."})
+                         fallback={"available": False, "flag": "Soil data unavailable."}, timings=timings)
     hydro_q = _safe_query("hydro", q_module.query_hydro, lat, lon,
-                          fallback={"available": False, "flag": "Hydrography data unavailable."})
+                          fallback={"available": False, "flag": "Hydrography data unavailable."}, timings=timings)
     noaa_q = _safe_query("noaa_normals", q_module.query_noaa_normals, lat, lon,
-                         fallback={"available": False, "flag": "NOAA climate data unavailable."})
+                         fallback={"available": False, "flag": "NOAA climate data unavailable."}, timings=timings)
     elev_q = _safe_query("elevation", q_module.query_elevation, lat, lon,
-                         fallback={"available": False, "flag": "Elevation data unavailable."})
+                         fallback={"available": False, "flag": "Elevation data unavailable."}, timings=timings)
     slope_q = _safe_query("slope", q_module.query_slope, lat, lon,
-                          fallback={"available": False, "flag": "Slope data unavailable."})
+                          fallback={"available": False, "flag": "Slope data unavailable."}, timings=timings)
     lc_q = _safe_query("land_cover", q_module.query_land_cover, lat, lon,
-                       fallback={"available": False, "flag": "Land cover data unavailable."})
+                       fallback={"available": False, "flag": "Land cover data unavailable."}, timings=timings)
     seismic_q = _safe_query("seismic_pga", q_module.query_seismic_pga, lat, lon,
-                            fallback={"available": False, "flag": "Seismic data unavailable."})
+                            fallback={"available": False, "flag": "Seismic data unavailable."}, timings=timings)
     wf_q = _safe_query("wildfire_whp", q_module.query_wildfire_whp, lat, lon,
-                       fallback={"available": False, "flag": "Wildfire data unavailable."})
+                       fallback={"available": False, "flag": "Wildfire data unavailable."}, timings=timings)
     nasa_q = _safe_query("nasa_power", q_module.query_nasa_power, lat, lon,
-                         fallback={"available": False, "flag": "NASA POWER data unavailable."})
+                         fallback={"available": False, "flag": "NASA POWER data unavailable."}, timings=timings)
     eq_q = _safe_query("earthquakes", q_module.query_earthquakes, lat, lon,
-                       fallback={"available": False, "flag": "Earthquake data unavailable.", "event_count": 0})
+                       fallback={"available": False, "flag": "Earthquake data unavailable.", "event_count": 0}, timings=timings)
     aqs_q = _safe_query("epa_aqs", q_module.query_epa_aqs, lat, lon,
-                        fallback={"available": False, "flag": "EPA AQS data unavailable."})
+                        fallback={"available": False, "flag": "EPA AQS data unavailable."}, timings=timings)
     fcc_q = _safe_query("fcc_broadband", q_module.query_fcc_broadband, lat, lon,
-                        fallback={"available": False, "flag": "FCC broadband data unavailable."})
+                        fallback={"available": False, "flag": "FCC broadband data unavailable."}, timings=timings)
 
     # ── Transform each section ────────────────────────────────────────────
     flood = _build_flood(flood_q)
@@ -977,6 +1004,7 @@ def build_context(
 
     # ── Demographics ──────────────────────────────────────────────────────
     demographics: dict[str, Any]
+    _t0_demo = time.perf_counter()
     if bg_q.get("available", False):
         try:
             from plinth.config import get_settings
@@ -1004,6 +1032,7 @@ def build_context(
             "acs_vintage": "",
             "groups": [],
         }
+    timings["demographics"] = time.perf_counter() - _t0_demo
 
     # ── population_5mi from demographics ─────────────────────────────────
     population_5mi = "N/A"
@@ -1017,6 +1046,7 @@ def build_context(
     risk_summary = _build_risk_summary(flood, seismic, wildfire, soil, air_quality, fema_nri)
 
     # ── Maps ──────────────────────────────────────────────────────────────
+    _t0_maps = time.perf_counter()
     try:
         from plinth.report.maps import fetch_all_maps, fetch_demographics_map_b64, fetch_demographics_closeup_map_b64
         maps = fetch_all_maps(lat, lon)
@@ -1025,6 +1055,7 @@ def build_context(
     except Exception as exc:
         log.warning("Map fetch failed: %s", exc)
         maps = {"cover": None, "terrain": None, "solar": None, "demographics": None}
+    timings["maps"] = time.perf_counter() - _t0_maps
 
     # Strip internal key before returning
     demographics.pop("_aggs", None)
@@ -1080,4 +1111,7 @@ def build_context(
 
         # Maps (Mapbox Static Images, or None if unavailable)
         "maps": maps,
+
+        # Timing data (stripped before PDF rendering)
+        "_timings": timings,
     }
