@@ -925,6 +925,7 @@
     Source: FCC National Broadband Map, deployment data.
   </div>
 
+  <h4 style="margin-top:10pt; margin-bottom:4pt;">Residential Broadband</h4>
   <table class="data-table provider-table avoid-break">
     <thead>
       <tr>
@@ -935,13 +936,39 @@
       </tr>
     </thead>
     <tbody>
-      {% for p in infrastructure.broadband %}
+      {% for p in infrastructure.broadband_residential %}
       <tr>
         <td>{{ p.provider }}</td>
         <td>{{ p.technology }}</td>
         <td class="speed">{{ p.max_down_mbps }}</td>
         <td class="speed">{{ p.max_up_mbps }}</td>
       </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:#666; font-style:italic;">No residential broadband data available.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h4 style="margin-top:14pt; margin-bottom:4pt;">Commercial Broadband</h4>
+  <table class="data-table provider-table avoid-break">
+    <thead>
+      <tr>
+        <th>Provider</th>
+        <th>Technology</th>
+        <th style="text-align:right;">Max Down (Mbps)</th>
+        <th style="text-align:right;">Max Up (Mbps)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in infrastructure.broadband_commercial %}
+      <tr>
+        <td>{{ p.provider }}</td>
+        <td>{{ p.technology }}</td>
+        <td class="speed">{{ p.max_down_mbps }}</td>
+        <td class="speed">{{ p.max_up_mbps }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:#666; font-style:italic;">No commercial broadband data available.</td></tr>
       {% endfor %}
     </tbody>
   </table>

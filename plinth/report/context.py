@@ -746,17 +746,23 @@ def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
 
 
 def _build_infrastructure(fcc_q: dict) -> dict:
-    providers = []
+    residential, commercial = [], []
     if fcc_q.get("available", False):
         for p in fcc_q.get("all_providers", []):
-            providers.append({
+            stype = p.get("service_type", "")
+            row = {
                 "provider": p.get("brand_name", ""),
                 "technology": p.get("technology", ""),
                 "max_down_mbps": p.get("max_download_mbps"),
                 "max_up_mbps": p.get("max_upload_mbps"),
-            })
+            }
+            if stype in ("R", "X"):
+                residential.append(row)
+            if stype in ("B", "X"):
+                commercial.append(row)
     return {
-        "broadband": providers,
+        "broadband_residential": residential,
+        "broadband_commercial": commercial,
         "road_note": "Road access data not yet available.",
         "transit_note": "Transit proximity data not yet available.",
         "water_sewer_note": (
