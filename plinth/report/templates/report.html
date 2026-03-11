@@ -292,93 +292,101 @@
   {% if soil.available %}
   <div class="avoid-break">
     <h3>Soil Profile — USDA SSURGO</h3>
+    <table class="data-table ssurgo-table">
+      <colgroup>
+        <col style="width:34%">
+        <col>
+      </colgroup>
+      <tbody>
+        <tr class="ssurgo-group-header">
+          <td colspan="2">Physical Conditions</td>
+        </tr>
+        <tr>
+          <td>Map Unit</td>
+          <td>{{ soil.muname }}</td>
+        </tr>
+        <tr>
+          <td>Dominant Component</td>
+          <td>{{ soil.dominant_component }}{% if soil.dominant_component_pct %} ({{ soil.dominant_component_pct }}%){% endif %}</td>
+        </tr>
+        <tr>
+          <td>Hydrologic Group</td>
+          <td>{{ soil.hydrologic_group or "—" }}</td>
+        </tr>
+        <tr>
+          <td>Drainage Class</td>
+          <td>{{ soil.drainage_class or "—" }}</td>
+        </tr>
+        {% if soil.slope_pct is not none %}
+        <tr>
+          <td>Slope</td>
+          <td>{{ soil.slope_pct }}%</td>
+        </tr>
+        {% endif %}
+        <tr>
+          <td>Flood Frequency</td>
+          <td>{{ soil.flood_frequency or "None" }}</td>
+        </tr>
+        <tr>
+          <td>Depth to Water Table</td>
+          <td>{% if soil.water_table_depth_cm is not none %}{{ soil.water_table_depth_cm }} cm ({{ (soil.water_table_depth_cm / 30.48) | round(1) }} ft){% else %}Not reported{% endif %}</td>
+        </tr>
+        <tr>
+          <td>Depth to Bedrock</td>
+          <td>{% if soil.bedrock_depth_cm is not none %}{{ soil.bedrock_depth_cm }} cm ({{ (soil.bedrock_depth_cm / 30.48) | round(1) }} ft){% else %}Not reported / very deep{% endif %}</td>
+        </tr>
 
-    <h4 style="margin:0.6em 0 0.3em; font-size:0.85em; text-transform:uppercase; letter-spacing:0.05em; color:#555;">Physical Conditions</h4>
-    <div class="kv-grid">
-      <div class="kv-row">
-        <div class="kv-label">Map Unit</div>
-        <div class="kv-value">{{ soil.muname }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Dominant Component</div>
-        <div class="kv-value">{{ soil.dominant_component }}{% if soil.dominant_component_pct %} ({{ soil.dominant_component_pct }}%){% endif %}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Hydrologic Group</div>
-        <div class="kv-value">{{ soil.hydrologic_group or "—" }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Drainage Class</div>
-        <div class="kv-value">{{ soil.drainage_class or "—" }}</div>
-      </div>
-      {% if soil.slope_pct is not none %}
-      <div class="kv-row">
-        <div class="kv-label">Slope</div>
-        <div class="kv-value">{{ soil.slope_pct }}%</div>
-      </div>
-      {% endif %}
-      <div class="kv-row">
-        <div class="kv-label">Flood Frequency</div>
-        <div class="kv-value">{{ soil.flood_frequency or "None" }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Depth to Water Table</div>
-        <div class="kv-value">{% if soil.water_table_depth_cm is not none %}{{ soil.water_table_depth_cm }} cm ({{ (soil.water_table_depth_cm / 30.48) | round(1) }} ft){% else %}Not reported{% endif %}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Depth to Bedrock</div>
-        <div class="kv-value">{% if soil.bedrock_depth_cm is not none %}{{ soil.bedrock_depth_cm }} cm ({{ (soil.bedrock_depth_cm / 30.48) | round(1) }} ft){% else %}Not reported / very deep{% endif %}</div>
-      </div>
-    </div>
+        <tr class="ssurgo-group-header">
+          <td colspan="2">Farmland &amp; Water</td>
+        </tr>
+        <tr>
+          <td>Land Capability Class</td>
+          <td>{% if soil.land_capability_class %}Class {{ soil.land_capability_class }} (1 = most productive, 8 = most limited){% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+          <td>Available Water Storage</td>
+          <td>{% if soil.available_water_storage_in is not none %}{{ soil.available_water_storage_in | round(1) }} in (0–100 cm depth){% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+          <td>Erosion Hazard</td>
+          <td>{{ soil.erosion_hazard or "—" }}</td>
+        </tr>
 
-    <h4 style="margin:0.8em 0 0.3em; font-size:0.85em; text-transform:uppercase; letter-spacing:0.05em; color:#555;">Farmland &amp; Water</h4>
-    <div class="kv-grid">
-      <div class="kv-row">
-        <div class="kv-label">Land Capability Class</div>
-        <div class="kv-value">{% if soil.land_capability_class %}Class {{ soil.land_capability_class }} (1 = most productive, 8 = most limited){% else %}—{% endif %}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Available Water Storage</div>
-        <div class="kv-value">{% if soil.available_water_storage_in is not none %}{{ soil.available_water_storage_in | round(1) }} in (0–100 cm depth){% else %}—{% endif %}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Erosion Hazard</div>
-        <div class="kv-value">{{ soil.erosion_hazard or "—" }}</div>
-      </div>
-    </div>
+        <tr class="ssurgo-group-header">
+          <td colspan="2">Engineering Suitability</td>
+        </tr>
+        <tr>
+          <td>Septic Absorption Fields</td>
+          <td>{{ soil.septic }}</td>
+        </tr>
+        <tr>
+          <td>Dwellings w/o Basement</td>
+          <td>{{ soil.dwellings_no_basement }}</td>
+        </tr>
+        <tr>
+          <td>Dwellings w/ Basement</td>
+          <td>{{ soil.dwellings_with_basement }}</td>
+        </tr>
+        <tr>
+          <td>Local Roads &amp; Streets</td>
+          <td>{{ soil.local_roads }}</td>
+        </tr>
 
-    <h4 style="margin:0.8em 0 0.3em; font-size:0.85em; text-transform:uppercase; letter-spacing:0.05em; color:#555;">Engineering Suitability</h4>
-    <div class="kv-grid">
-      <div class="kv-row">
-        <div class="kv-label">Septic Absorption Fields</div>
-        <div class="kv-value">{{ soil.septic }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Dwellings w/o Basement</div>
-        <div class="kv-value">{{ soil.dwellings_no_basement }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Dwellings w/ Basement</div>
-        <div class="kv-value">{{ soil.dwellings_with_basement }}</div>
-      </div>
-      <div class="kv-row">
-        <div class="kv-label">Local Roads &amp; Streets</div>
-        <div class="kv-value">{{ soil.local_roads }}</div>
-      </div>
-    </div>
-
-    <div class="kv-grid" style="margin-top:0.6em;">
-      <div class="kv-row">
-        <div class="kv-label">Taxonomic Class</div>
-        <div class="kv-value" style="font-style:italic;">{{ soil.taxonomic_class or "—" }}</div>
-      </div>
-      {% if soil.nearest_fallback %}
-      <div class="kv-row">
-        <div class="kv-label">Note</div>
-        <div class="kv-value">Nearest mapped unit returned — site may be in an unmapped area (e.g., active floodplain). Verify with <a href="https://websoilsurvey.sc.egov.usda.gov/">USDA Web Soil Survey</a>.</div>
-      </div>
-      {% endif %}
-    </div>
+        <tr class="ssurgo-group-header">
+          <td colspan="2">Classification</td>
+        </tr>
+        <tr>
+          <td>Taxonomic Class</td>
+          <td style="font-style:italic;">{{ soil.taxonomic_class or "—" }}</td>
+        </tr>
+        {% if soil.nearest_fallback %}
+        <tr>
+          <td>Note</td>
+          <td>Nearest mapped unit returned — site may be in an unmapped area (e.g., active floodplain). Verify with <a href="https://websoilsurvey.sc.egov.usda.gov/">USDA Web Soil Survey</a>.</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
 
     <div class="inline-disclaimer">
       The Soil Survey Geographic Database (SSURGO) is the USDA Natural Resources Conservation

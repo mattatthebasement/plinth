@@ -296,6 +296,23 @@ table.data-table tr:nth-child(even) td {
     background: #fafafa;
 }
 
+/* SSURGO grouped table — section header rows + label column */
+table.ssurgo-table tr.ssurgo-group-header td {
+    background: #ebebeb;
+    font-weight: 700;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #444;
+    padding: 4pt 8pt;
+    border-top: 0.5pt solid #ccc;
+    border-bottom: 0.5pt solid #ccc;
+}
+
+table.ssurgo-table tr.ssurgo-group-header:first-child td {
+    border-top: 0.5pt solid #ccc;
+}
+
 /* Compact climate monthly table */
 table.climate-table {
     width: 100%;
