@@ -746,7 +746,8 @@ def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
 
 
 def _build_infrastructure(fcc_q: dict) -> dict:
-    residential, commercial = [], []
+    residential: dict[tuple, dict] = {}
+    commercial: dict[tuple, dict] = {}
     if fcc_q.get("available", False):
         for p in fcc_q.get("all_providers", []):
             stype = p.get("service_type", "")
@@ -756,13 +757,14 @@ def _build_infrastructure(fcc_q: dict) -> dict:
                 "max_down_mbps": p.get("max_download_mbps"),
                 "max_up_mbps": p.get("max_upload_mbps"),
             }
+            key = (row["provider"], row["technology"], row["max_down_mbps"], row["max_up_mbps"])
             if stype in ("R", "X"):
-                residential.append(row)
+                residential.setdefault(key, row)
             if stype in ("B", "X"):
-                commercial.append(row)
+                commercial.setdefault(key, row)
     return {
-        "broadband_residential": residential,
-        "broadband_commercial": commercial,
+        "broadband_residential": list(residential.values()),
+        "broadband_commercial": list(commercial.values()),
         "road_note": "Road access data not yet available.",
         "transit_note": "Transit proximity data not yet available.",
         "water_sewer_note": (
