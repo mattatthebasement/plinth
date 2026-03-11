@@ -459,32 +459,6 @@ Table epa_aqs_annual_summary {
   Note: 'EPA AQS annual pollutant summary. One row per site × year × parameter × pollutant standard. Loaded from pre-built annual_conc_by_monitor_YYYY.zip (no API key). 5 years loaded (~297k rows). Refreshed annually.'
 }
 
-Table fcc_broadband_availability {
-  id                        bigserial [pk]
-  location_id               bigint    [not null, note: 'FCC fabric location_id']
-  frn                       text      [note: 'FCC Registration Number (provider)']
-  provider_id               text
-  brand_name                text
-  technology_code           smallint  [note: '10=Copper, 40=Cable, 50=Fiber, 70/71/72=Fixed Wireless']
-  max_download_speed        integer   [note: 'Mbps']
-  max_upload_speed          integer   [note: 'Mbps']
-  low_latency               boolean
-  business_residential_code char(1)   [note: 'R=Residential, X=Both']
-  state_usps                text
-  county_geoid              text
-  block_geoid               text      [note: '15-digit census block GEOID']
-  h3_res8_id                text
-  geom                      geometry(Point, 4326)
-
-  indexes {
-    geom        [type: gist, name: 'fcc_broadband_geom_idx']
-    location_id [name: 'fcc_broadband_location_idx']
-    county_geoid [name: 'fcc_broadband_county_idx']
-    block_geoid [name: 'fcc_broadband_block_idx']
-  }
-
-  Note: 'FCC BDC fixed broadband availability by location (bulk table, migration 007). Currently unpopulated — all FCC BDC data download endpoints return HTTP 405. Distinct from fcc_broadband_coverage which was the original API-based design.'
-}
 
 Table nasa_power_climatology {
   grid_lat           numeric(5,2) [not null, note: 'SW corner of 0.5° POWER grid cell']

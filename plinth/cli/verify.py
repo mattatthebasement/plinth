@@ -4,6 +4,7 @@ Usage:
     plinth-cli verify all
     plinth-cli verify census-acs
     plinth-cli verify epa-aqs
+    plinth-cli verify fcc-broadband
     plinth-cli verify nasa-power
     plinth-cli verify usgs-earthquakes
     plinth-cli verify usda-whp
@@ -276,6 +277,56 @@ def _check_usgs_earthquakes() -> dict:
         return _fail(name, f"ERROR: {exc}")
 
 
+def _check_fcc_broadband() -> dict:
+    """Check FCC broadband coverage data for the test block group."""
+    name = "fcc-broadband"
+    try:
+        with _db() as conn:
+            with conn.cursor() as cur:
+                # Find block group for test coordinate
+                cur.execute(
+                    """
+                    SELECT geoid FROM census_block_groups
+                    WHERE ST_Contains(geom, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+                    LIMIT 1
+                    """,
+                    (_TEST_LON, _TEST_LAT),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return _fail(name, "No census block group found for test coordinate")
+                bg_geoid = row[0]
+
+                # Provider count in that block group
+                cur.execute(
+                    """
+                    SELECT COUNT(DISTINCT brand_name),
+                           COUNT(DISTINCT technology_code),
+                           MAX(as_of_date::text)
+                    FROM fcc_broadband_coverage
+                    WHERE LEFT(block_geoid, 12) = %s
+                    """,
+                    (bg_geoid,),
+                )
+                providers, tech_count, as_of = cur.fetchone()
+
+                # Total rows in table
+                cur.execute("SELECT COUNT(*) FROM fcc_broadband_coverage")
+                total = cur.fetchone()[0]
+
+        if total == 0:
+            return _fail(name, "No rows loaded in fcc_broadband_coverage")
+        if providers == 0:
+            return _fail(name, f"No providers found for test block group {bg_geoid}")
+        return _pass(
+            name,
+            f"{total:,} total rows; test BG {bg_geoid}: "
+            f"{providers} providers, {tech_count} tech types; as-of {as_of}"
+        )
+    except Exception as exc:
+        return _fail(name, f"ERROR: {exc}")
+
+
 def _check_usda_whp() -> dict:
     """Check USDA WHP raster tile registration and sample value."""
     name = "usda-whp-raster"
@@ -386,6 +437,7 @@ def _sample_raster_value(
 _ALL_CHECKS = {
     "census-acs": _check_census_acs,
     "epa-aqs": _check_epa_aqs,
+    "fcc-broadband": _check_fcc_broadband,
     "nasa-power": _check_nasa_power,
     "usgs-earthquakes": _check_usgs_earthquakes,
     "usda-whp": _check_usda_whp,

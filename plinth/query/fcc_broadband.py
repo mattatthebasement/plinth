@@ -17,7 +17,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from plinth.ingest.api.fcc_broadband import DISCLAIMER
+DISCLAIMER = (
+    "Broadband availability data is self-reported by ISPs to the FCC and may "
+    "significantly overstate actual service availability and speeds."
+)
 
 _TECH_LABELS: dict[int, str] = {
     0: "Other",

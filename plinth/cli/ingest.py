@@ -217,3 +217,41 @@ def ingest_usgs_earthquakes_bulk(min_mag: float) -> None:
 def _require_ingestor(name: str) -> None:
     """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
     click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
+
+
+@ingest.command("status")
+def ingest_status() -> None:
+    """Show ingestion status of all registered datasets from data_source_registry."""
+    from plinth.db.connection import get_connection
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT source_name, dataset_version, last_downloaded,
+                       update_frequency, next_review_date, coverage_region
+                FROM data_source_registry
+                ORDER BY source_name
+                """
+            )
+            rows = cur.fetchall()
+
+    if not rows:
+        click.echo("No datasets registered yet. Run ingestion first.")
+        return
+
+    col_w = [max(len(str(r[i])) for r in rows) for i in range(6)]
+    headers = ["SOURCE", "VERSION", "LAST DOWNLOADED", "FREQUENCY", "NEXT REVIEW", "REGION"]
+    col_w = [max(col_w[i], len(headers[i])) for i in range(6)]
+
+    def _row(vals):
+        return "  ".join(str(v).ljust(col_w[i]) for i, v in enumerate(vals))
+
+    click.echo()
+    click.echo("  " + _row(headers))
+    click.echo("  " + "  ".join("─" * w for w in col_w))
+    for r in rows:
+        downloaded = r[2].strftime("%Y-%m-%d %H:%M") if r[2] else "—"
+        next_review = str(r[4]) if r[4] else "—"
+        click.echo("  " + _row([r[0], r[1] or "—", downloaded, r[3] or "—", next_review, r[5] or "—"]))
+    click.echo(f"\n  {len(rows)} dataset(s) registered.\n")
