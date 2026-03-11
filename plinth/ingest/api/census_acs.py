@@ -860,3 +860,88 @@ def fetch_area_weighted(
         # Expose raw aggregates for use by build_context (e.g. population_5mi)
         "_aggs": aggs,
     }
+
+
+def fetch_area_weighted_local(
+    block_groups_by_radius: dict[str, list[dict]],
+    acs_year: int = 2023,
+) -> dict[str, Any]:
+    """
+    Fetch ACS data from the local ``acs_block_group_data`` table and return
+    the aggregated demographics context dict.  No Census API key required.
+
+    Identical output structure to ``fetch_area_weighted()``.
+
+    Args:
+        block_groups_by_radius: Dict keyed by radius label ("1mi", "5mi", "10mi"),
+            each containing a list of {geoid, intersection_pct} dicts.
+        acs_year: ACS 5-year vintage end year (default 2023 → 2019–2023).
+    """
+    from plinth.db.connection import get_connection
+
+    all_geoids: set[str] = set()
+    for bg_list in block_groups_by_radius.values():
+        for bg in bg_list:
+            all_geoids.add(bg["geoid"])
+
+    if not all_geoids:
+        return {
+            "available": False,
+            "flag": "No block groups found near this location.",
+            "note": "", "acs_vintage": "", "groups": [],
+        }
+
+    geoid_list = sorted(all_geoids)
+    placeholders = ",".join(["%s"] * len(geoid_list))
+
+    # All data columns are exactly the ACS_VARS field names
+    field_cols = ", ".join(_VAR_NAMES)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT geoid, {field_cols} FROM acs_block_group_data "
+                f"WHERE geoid IN ({placeholders}) AND acs_year = %s",
+                geoid_list + [acs_year],
+            )
+            rows = cur.fetchall()
+
+    col_names = ["geoid"] + _VAR_NAMES
+    acs_data: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        row_dict = dict(zip(col_names, row))
+        geoid = row_dict.pop("geoid")
+        acs_data[geoid] = {
+            k: float(v) if v is not None else None
+            for k, v in row_dict.items()
+        }
+
+    if not acs_data:
+        return {
+            "available": False,
+            "flag": (
+                "Census ACS data not loaded for this area "
+                "(no matching block groups in local database)."
+            ),
+            "note": "", "acs_vintage": "", "groups": [],
+        }
+
+    radii_order = ["1mi", "5mi", "10mi"]
+    aggs: dict[str, dict[str, Any]] = {}
+    for label in radii_order:
+        bg_list = block_groups_by_radius.get(label, [])
+        aggs[label] = _aggregate(bg_list, acs_data)
+
+    rows_data = _build_demographics_rows(aggs)
+    vintage_start = acs_year - 4
+
+    return {
+        "available": True,
+        "note": (
+            "Area-weighted block group intersections. "
+            "Straight-line radius buffers — physical barriers not accounted for."
+        ),
+        "acs_vintage": f"{vintage_start}–{acs_year} ACS 5-Year Estimates",
+        "groups": rows_data["groups"],
+        "_aggs": aggs,
+    }

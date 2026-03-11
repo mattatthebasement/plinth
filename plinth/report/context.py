@@ -1007,12 +1007,9 @@ def build_context(
     _t0_demo = time.perf_counter()
     if bg_q.get("available", False):
         try:
-            from plinth.config import get_settings
-            from plinth.ingest.api.census_acs import fetch_area_weighted
-            settings = get_settings()
-            demographics = fetch_area_weighted(
+            from plinth.ingest.api.census_acs import fetch_area_weighted_local
+            demographics = fetch_area_weighted_local(
                 block_groups_by_radius=bg_q.get("radii", {}),
-                api_key=settings.census_api_key,
             )
         except Exception as exc:
             log.warning("Census ACS fetch failed: %s", exc)
