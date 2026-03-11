@@ -8,6 +8,9 @@ broadband coverage rows whose ``block_geoid`` starts with that block group GEOID
 This returns all providers and technologies reported as available at any
 serviceable location within the same census block group as the query point —
 a good proxy for site-level broadband availability.
+
+R = Residential only, B = Business only, X = Both. All three are loaded
+and reported. Satellite (tech 60/61) is excluded from the bulk data.
 """
 
 from __future__ import annotations
@@ -34,18 +37,18 @@ def query_fcc_broadband(lat: float, lon: float) -> dict[str, Any]:
     Return fixed broadband providers available at the query point.
 
     Looks up the census block group containing (lat, lon), then returns all
-    FCC broadband coverage rows for that block group, grouped by provider
-    and technology. Satellite broadband is noted separately as universally
-    available.
+    FCC broadband coverage rows for that block group, grouped by provider,
+    technology, and service type (R/B/X). Residential and business connectivity
+    are reported separately so developers can assess both service types.
 
     Returns a dict with keys:
       - available (bool)
-      - providers (list of dicts with brand_name, technology, download/upload Mbps)
-      - best_download_mbps (int | None)
-      - best_upload_mbps (int | None)
-      - technologies (list of technology label strings)
+      - residential: {providers, best_download_mbps, best_upload_mbps, technologies}
+      - business:    {providers, best_download_mbps, best_upload_mbps, technologies}
+      - all_providers (list — full detail rows)
       - block_group_geoid (str)
       - source_date (str — the as-of date of the loaded data)
+      - satellite_note (str)
       - disclaimer (str)
       - flag (str, only present if data unavailable)
     """
@@ -78,17 +81,17 @@ def query_fcc_broadband(lat: float, lon: float) -> dict[str, Any]:
             # Step 2: look up all broadband providers for that block group
             cur.execute(
                 """
-                SELECT DISTINCT
+                SELECT
                     brand_name,
                     technology_code,
+                    business_residential_code,
                     MAX(max_download_mbps) AS max_dl,
                     MAX(max_upload_mbps)   AS max_ul,
                     bool_or(low_latency)   AS low_latency,
                     MAX(as_of_date::text)  AS as_of_date
                 FROM fcc_broadband_coverage
                 WHERE LEFT(block_geoid, 12) = %s
-                  AND business_residential_code IN ('R', 'X')
-                GROUP BY brand_name, technology_code
+                GROUP BY brand_name, technology_code, business_residential_code
                 ORDER BY MAX(max_download_mbps) DESC, brand_name
                 """,
                 (bg_geoid,),
@@ -106,37 +109,50 @@ def query_fcc_broadband(lat: float, lon: float) -> dict[str, Any]:
             "disclaimer": DISCLAIMER,
         }
 
-    as_of_date = rows[0][5] if rows else None
-    providers = []
-    best_dl = 0
-    best_ul = 0
-    tech_set: set[str] = set()
+    as_of_date = rows[0][6] if rows else None
+    all_providers = []
 
-    for brand_name, tech_code, max_dl, max_ul, low_lat, _ in rows:
+    for brand_name, tech_code, brc, max_dl, max_ul, low_lat, _ in rows:
         label = _TECH_LABELS.get(tech_code, f"Tech {tech_code}")
-        providers.append({
+        all_providers.append({
             "brand_name": brand_name,
             "technology": label,
             "technology_code": tech_code,
+            "service_type": brc,   # R=Residential, B=Business, X=Both
             "max_download_mbps": max_dl,
             "max_upload_mbps": max_ul,
             "low_latency": low_lat,
         })
-        tech_set.add(label)
-        if max_dl and max_dl > best_dl:
-            best_dl = max_dl
-        if max_ul and max_ul > best_ul:
-            best_ul = max_ul
+
+    def _summarise(brc_values: set[str]) -> dict[str, Any]:
+        subset = [p for p in all_providers if p["service_type"] in brc_values]
+        if not subset:
+            return {"available": False, "providers": [], "technologies": []}
+        best_dl = max((p["max_download_mbps"] or 0 for p in subset), default=0)
+        best_ul = max((p["max_upload_mbps"] or 0 for p in subset), default=0)
+        techs = sorted({p["technology"] for p in subset})
+        return {
+            "available": True,
+            "provider_count": len(subset),
+            "providers": subset,
+            "best_download_mbps": best_dl or None,
+            "best_upload_mbps": best_ul or None,
+            "technologies": techs,
+        }
 
     return {
         "available": True,
-        "providers": providers,
-        "provider_count": len(providers),
-        "best_download_mbps": best_dl or None,
-        "best_upload_mbps": best_ul or None,
-        "technologies": sorted(tech_set),
-        "satellite_note": "GSO and NGSO satellite broadband (e.g. Starlink, Viasat) is available at virtually all US locations and is not included in the counts above.",
+        # R + X rows = residential service available
+        "residential": _summarise({"R", "X"}),
+        # B + X rows = business service available
+        "business": _summarise({"B", "X"}),
+        "all_providers": all_providers,
         "block_group_geoid": bg_geoid,
         "source_date": as_of_date,
+        "satellite_note": (
+            "GSO and NGSO satellite broadband (e.g. Starlink, Viasat) is available at "
+            "virtually all US locations and is not included in the counts above."
+        ),
         "disclaimer": DISCLAIMER,
     }
+

@@ -187,7 +187,7 @@ class FccBroadbandIngestor(BaseIngestor):
                 zip_bytes, state_fips, as_of_date, get_connection
             )
             self._total_rows += rows_loaded
-            self._log(f"    Loaded {rows_loaded:,} residential/mixed rows")
+            self._log(f"    Loaded {rows_loaded:,} rows")
 
         self._log(f"Total rows upserted: {self._total_rows:,}")
 
