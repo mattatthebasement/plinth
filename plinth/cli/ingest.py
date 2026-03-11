@@ -160,6 +160,20 @@ def ingest_census_acs_bulk(year: int) -> None:
     CensusAcsBulkIngestor(year=year).run()
 
 
+@ingest.command("epa-aqs-bulk")
+@click.option("--years", default=5, show_default=True, help="Number of years to load (most recent first).")
+def ingest_epa_aqs_bulk(years: int) -> None:
+    """Bulk-ingest EPA AQS annual summary files (no API key required).
+
+    Downloads annual_conc_by_monitor_YYYY.zip for the last YEARS years
+    from aqs.epa.gov and loads all monitor/pollutant records into
+    epa_aqs_sites and epa_aqs_annual_summary.
+    """
+    from plinth.ingest.epa_aqs_bulk import EpaAqsBulkIngestor
+
+    EpaAqsBulkIngestor(years=years).run()
+
+
 def _require_ingestor(name: str) -> None:
     """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
     click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
