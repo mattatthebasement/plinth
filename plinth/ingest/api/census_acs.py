@@ -801,6 +801,12 @@ def fetch_area_weighted(
     rows_data = _build_demographics_rows(aggs)
     vintage_start = acs_year - 4
 
+    from plinth.db.registry import register_api_source
+    register_api_source(
+        _DATASET, version=f"{vintage_start}–{acs_year} ACS 5-Year",
+        update_frequency="on-demand", notes="Block group level; area-weighted",
+    )
+
     return {
         "available": True,
         "note": (

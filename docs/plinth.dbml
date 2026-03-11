@@ -255,6 +255,17 @@ Table ssurgo_muaggatt {
   drclassdcd   text    [note: 'Drainage class']
   slopegraddcp numeric [note: 'Representative slope gradient (%)']
   taxclname    text    [note: 'Taxonomic classification name']
+  // Extended muaggatt fields (added migration 006)
+  flodfreqdcd  text    [note: 'Flood frequency (dominant condition)']
+  wtdepannmin  integer [note: 'Annual minimum depth to water table (cm)']
+  brockdepmin  integer [note: 'Minimum depth to bedrock (cm)']
+  niccdcd      text    [note: 'Non-irrigated land capability class (1–8)']
+  aws0100wta   numeric [note: 'Available water storage 0–100cm (weighted avg, inches)']
+  engstafdcd   text    [note: 'Septic tank absorption field suitability (dominant condition)']
+  engdwobdcd   text    [note: 'Dwellings without basement suitability (dominant condition)']
+  engdwbdcd    text    [note: 'Dwellings with basement suitability (dominant condition)']
+  englrsdcd    text    [note: 'Local roads and streets suitability (dominant condition)']
+  forpehrtdcp  text    [note: 'Potential erosion hazard (dominant condition)']
 
   Note: 'SSURGO map-unit aggregated attributes (tabular — no geometry).'
 }
@@ -272,6 +283,23 @@ Table ssurgo_component {
 
   Note: 'SSURGO soil components (tabular — no geometry). References ssurgo_mapunits.'
 }
+
+Table ssurgo_cointerp_engr {
+  cokey      text    [not null, ref: > ssurgo_component.cokey]
+  mukey      text    [not null, ref: > ssurgo_mapunits.mukey]
+  mrulename  text    [not null, note: 'Interpretation rule name (e.g. ENG - Dwellings W/O Basements)']
+  seqnum     integer [not null, note: 'Sequence: 0=overall rating, 1+=limiting factors in order']
+  interphrc  text    [note: 'Rating or limiting factor text']
+
+  indexes {
+    (cokey, mrulename, seqnum) [pk]
+    mukey  [name: 'ssurgo_cointerp_engr_mukey_idx']
+    cokey  [name: 'ssurgo_cointerp_engr_cokey_idx']
+  }
+
+  Note: 'SSURGO component-level engineering interpretation ratings with limiting factors. seqnum=0 is the overall rating (Not limited / Somewhat limited / Very limited); seqnum≥1 are the limiting factors in order of severity (e.g. Shrink-swell, Depth to saturated zone).'
+}
+
 
 Table noaa_climate_normals {
   station_id  text    [pk, note: 'NOAA station identifier (e.g. USW00013967)']

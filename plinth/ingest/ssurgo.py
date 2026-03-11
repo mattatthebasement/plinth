@@ -58,6 +58,7 @@ class SsurgoIngestor(BaseIngestor):
         self._log(f"Fetching SSURGO for {len(areas)} survey areas…")
         self._fetch_mapunits_via_wfs(areas)
         self._fetch_components_via_sdm(areas)
+        self._fetch_cointerp_via_sdm(areas)
 
         meta_path.write_text(json.dumps({"fetched_date": __import__("datetime").date.today().isoformat()}))
 
@@ -232,15 +233,21 @@ class SsurgoIngestor(BaseIngestor):
         if not comp_path.exists():
             raise ValueError("Component cache not found. Run download() first.")
 
+        cointerp_path = self.staging_dir / "cointerp.json"
+        if not cointerp_path.exists():
+            raise ValueError("Cointerp cache not found. Run download() first.")
+
         self._log("Validation passed.")
 
     def load(self) -> None:
-        """Upsert map units, muaggatt attributes, and components into PostGIS."""
+        """Upsert map units, muaggatt attributes, components, and cointerp into PostGIS."""
         if self._data_fresh:
             self._log("Skipping load (data already loaded from prior run).")
             return
         self._load_mapunits_and_muaggatt()
+        self._fetch_muaggatt_via_sdm()
         self._load_components()
+        self._load_cointerp()
 
     def _load_mapunits_and_muaggatt(self) -> None:
         from plinth.db.connection import get_connection
@@ -249,14 +256,19 @@ class SsurgoIngestor(BaseIngestor):
         with get_connection() as conn:
             with conn.cursor() as cur:
                 area_list = ",".join(f"'{a}'" for a in NE_OK_SURVEY_AREAS)
-                # Deduplicate: bboxes overlap, so the same mukey may appear more
-                # than once in the staging table. Use DISTINCT ON to keep one row.
+                # Each mukey may have many polygons scattered across a county.
+                # DISTINCT ON would discard all but one — union all polygons per
+                # mukey into a single MultiPolygon so spatial queries hit every patch.
                 cur.execute(f"""
                     INSERT INTO ssurgo_mapunits (mukey, musym, muname, geom)
-                    SELECT DISTINCT ON (mukey) mukey, musym, muname, geom
+                    SELECT
+                        mukey,
+                        MAX(musym),
+                        MAX(muname),
+                        ST_Multi(ST_Union(geom))
                     FROM _staging_ssurgo_wfs
                     WHERE areasymbol IN ({area_list})
-                    ORDER BY mukey
+                    GROUP BY mukey
                     ON CONFLICT (mukey) DO UPDATE SET
                         musym  = EXCLUDED.musym,
                         muname = EXCLUDED.muname,
@@ -324,6 +336,187 @@ class SsurgoIngestor(BaseIngestor):
                 conn.commit()
                 total += len(batch)
         self._log(f"  ssurgo_component upserted: {total}")
+
+    def _fetch_muaggatt_via_sdm(self) -> None:
+        """Query SDM Tabular for extended muaggatt fields and upsert into PostGIS.
+
+        Runs after the WFS load so that mukeys are already in ssurgo_mapunits.
+        Batches mukey lookups in groups of 500 to stay within SDM query limits.
+        """
+        import httpx
+
+        from plinth.db.connection import get_connection
+
+        # Collect all mukeys currently in the DB
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT mukey FROM ssurgo_mapunits ORDER BY mukey")
+                all_mukeys = [r[0] for r in cur.fetchall()]
+
+        if not all_mukeys:
+            self._log("  No mukeys in ssurgo_mapunits — skipping muaggatt SDM fetch.")
+            return
+
+        self._log(f"  Fetching extended muaggatt for {len(all_mukeys)} mukeys via SDM Tabular…")
+
+        upsert_sql = """
+            INSERT INTO ssurgo_muaggatt (
+                mukey, flodfreqdcd, wtdepannmin, brockdepmin, niccdcd,
+                aws0100wta, engstafdcd, engdwobdcd, engdwbdcd, englrsdcd, forpehrtdcp
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (mukey) DO UPDATE SET
+                flodfreqdcd  = EXCLUDED.flodfreqdcd,
+                wtdepannmin  = EXCLUDED.wtdepannmin,
+                brockdepmin  = EXCLUDED.brockdepmin,
+                niccdcd      = EXCLUDED.niccdcd,
+                aws0100wta   = EXCLUDED.aws0100wta,
+                engstafdcd   = EXCLUDED.engstafdcd,
+                engdwobdcd   = EXCLUDED.engdwobdcd,
+                engdwbdcd    = EXCLUDED.engdwbdcd,
+                englrsdcd    = EXCLUDED.englrsdcd,
+                forpehrtdcp  = EXCLUDED.forpehrtdcp
+        """
+
+        total = 0
+        for i in range(0, len(all_mukeys), _BATCH_SIZE):
+            batch_keys = all_mukeys[i : i + _BATCH_SIZE]
+            key_list = ",".join(f"'{k}'" for k in batch_keys)
+            query = f"""
+                SELECT mukey, flodfreqdcd, wtdepannmin, brockdepmin, niccdcd,
+                       aws0100wta, engstafdcd, engdwobdcd, engdwbdcd, englrsdcd,
+                       forpehrtdcp
+                FROM muaggatt
+                WHERE mukey IN ({key_list})
+            """
+            try:
+                resp = httpx.post(
+                    SDM_TABULAR,
+                    data={"query": query, "format": "JSON+COLUMNNAME+METADATA"},
+                    timeout=120,
+                    follow_redirects=True,
+                )
+                resp.raise_for_status()
+                rows = resp.json().get("Table", [])
+                data_rows = rows[2:] if len(rows) > 2 else []
+            except Exception as exc:
+                self._log(f"  Warning: muaggatt SDM fetch batch {i//500+1} failed: {exc}")
+                continue
+
+            with get_connection() as conn:
+                batch: list[tuple] = []
+                for row in data_rows:
+                    mukey, flodfreqdcd, wtdepannmin, brockdepmin, niccdcd, \
+                        aws0100wta, engstafdcd, engdwobdcd, engdwbdcd, englrsdcd, \
+                        forpehrtdcp = row
+                    batch.append((
+                        mukey or None,
+                        flodfreqdcd or None,
+                        int(wtdepannmin) if wtdepannmin not in (None, "", "None") else None,
+                        int(brockdepmin) if brockdepmin not in (None, "", "None") else None,
+                        niccdcd or None,
+                        float(aws0100wta) if aws0100wta not in (None, "", "None") else None,
+                        engstafdcd or None,
+                        engdwobdcd or None,
+                        engdwbdcd or None,
+                        englrsdcd or None,
+                        forpehrtdcp or None,
+                    ))
+                if batch:
+                    with conn.cursor() as cur:
+                        cur.executemany(upsert_sql, batch)
+                    conn.commit()
+                    total += len(batch)
+
+        self._log(f"  ssurgo_muaggatt extended attributes upserted: {total}")
+
+    def _fetch_cointerp_via_sdm(self, areas: list[str]) -> None:
+        """Query SDM Tabular cointerp for engineering suitability ratings and cache as JSON.
+
+        Fetches seqnum 0–3 for four engineering interpretation rules for all
+        components in the given survey areas. seqnum=0 is the overall rating;
+        seqnum≥1 are the limiting factors in order of severity.
+        """
+        import httpx
+
+        area_list = ",".join(f"'{a}'" for a in areas)
+        query = f"""
+            SELECT ci.cokey, c.mukey, ci.mrulename, ci.seqnum, ci.interphrc
+            FROM cointerp ci
+            JOIN component c ON ci.cokey = c.cokey
+            JOIN mapunit mu ON c.mukey = mu.mukey
+            JOIN legend l ON mu.lkey = l.lkey
+            WHERE l.areasymbol IN ({area_list})
+            AND ci.mrulename IN (
+                'ENG - Dwellings W/O Basements',
+                'ENG - Dwellings With Basements',
+                'ENG - Septic Tank Absorption Fields',
+                'ENG - Local Roads and Streets'
+            )
+            AND ci.seqnum <= 3
+        """
+        self._log("  Querying SDM for cointerp engineering suitability data…")
+        try:
+            resp = httpx.post(
+                SDM_TABULAR,
+                data={"query": query, "format": "JSON+COLUMNNAME+METADATA"},
+                timeout=180,
+                follow_redirects=True,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            rows = data.get("Table", [])
+            data_rows = rows[2:] if len(rows) > 2 else []
+            cache_path = self.staging_dir / "cointerp.json"
+            cache_path.write_text(json.dumps(data_rows))
+            self._log(f"  Cointerp rows fetched: {len(data_rows)}")
+        except Exception as exc:
+            self._log(f"  Warning: cointerp fetch failed: {exc}")
+            cache_path = self.staging_dir / "cointerp.json"
+            cache_path.write_text(json.dumps([]))
+
+    def _load_cointerp(self) -> None:
+        """Upsert cointerp engineering suitability rows into ssurgo_cointerp_engr."""
+        cointerp_path = self.staging_dir / "cointerp.json"
+        rows = json.loads(cointerp_path.read_text())
+        if not rows:
+            self._log("  No cointerp data to load.")
+            return
+
+        from plinth.db.connection import get_connection
+
+        self._log(f"Loading {len(rows)} cointerp rows…")
+        upsert_sql = """
+            INSERT INTO ssurgo_cointerp_engr (cokey, mukey, mrulename, seqnum, interphrc)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (cokey, mrulename, seqnum) DO UPDATE SET
+                mukey     = EXCLUDED.mukey,
+                interphrc = EXCLUDED.interphrc
+        """
+        batch: list[tuple] = []
+        total = 0
+        with get_connection() as conn:
+            for row in rows:
+                cokey, mukey, mrulename, seqnum, interphrc = row
+                batch.append((
+                    cokey or None,
+                    mukey or None,
+                    mrulename or None,
+                    int(seqnum) if seqnum not in (None, "", "None") else None,
+                    interphrc or None,
+                ))
+                if len(batch) >= _BATCH_SIZE:
+                    with conn.cursor() as cur:
+                        cur.executemany(upsert_sql, batch)
+                    conn.commit()
+                    total += len(batch)
+                    batch = []
+            if batch:
+                with conn.cursor() as cur:
+                    cur.executemany(upsert_sql, batch)
+                conn.commit()
+                total += len(batch)
+        self._log(f"  ssurgo_cointerp_engr upserted: {total}")
 
     def _is_fresh(self, path: Path, ttl_days: int = 30) -> bool:
         if not path.exists():

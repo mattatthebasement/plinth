@@ -94,4 +94,11 @@ def fetch(lat: float, lon: float) -> dict[str, Any]:
         }
 
     set_cached(cache_key, _DATASET, result, _TTL_DAYS, lat=lat, lon=lon)
+
+    from plinth.db.registry import register_api_source
+    register_api_source(
+        _DATASET, version=f"{start_year}–{date.today().year}",
+        update_frequency="on-demand", notes=f"M{_MIN_MAG}+ within 50 mi, last {_YEARS} yr",
+    )
+
     return result

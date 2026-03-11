@@ -75,4 +75,11 @@ def fetch(lat: float, lon: float) -> dict[str, Any]:
     }
 
     set_cached(cache_key, _DATASET, result, _TTL_DAYS, lat=lat, lon=lon)
+
+    from plinth.db.registry import register_api_source
+    register_api_source(
+        _DATASET, version="NEHRP 2020",
+        update_frequency="on-demand", notes="NSHM model; ~5-year update cycle",
+    )
+
     return result

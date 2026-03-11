@@ -151,35 +151,79 @@ def _geocode(address: str) -> tuple[float, float, str, str, str]:
     )
 
 
+def _reverse_geocode_census(lat: float, lon: float) -> tuple[str, str]:
+    """Reverse-geocode via Census Bureau to get county and state.
+
+    Returns (county_name, state_abbrev) e.g. ("Tulsa County", "OK").
+    Falls back to ("", "") on failure.
+    """
+    url = (
+        "https://geocoding.geo.census.gov/geocoder/geographies/coordinates"
+        f"?x={lon}&y={lat}&benchmark=Public_AR_Current&vintage=Current_Current&format=json"
+    )
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception:
+        return "", ""
+
+    geos = data.get("result", {}).get("geographies", {})
+    counties = geos.get("Counties", [])
+    states = geos.get("States", [])
+    county = _title_case(counties[0].get("NAME", "")) if counties else ""
+    state = states[0].get("STUSAB", "") if states else ""
+    if county and not county.lower().endswith("county"):
+        county = f"{county} County"
+    return county, state
+
+
 @click.group()
 def report() -> None:
     """Report generation commands."""
 
 
 @report.command()
-@click.option("--address", required=True, help='US address string, e.g. "11822 E 116th St N, Collinsville, OK".')
+@click.option("--address", default=None, help='US address string, e.g. "11822 E 116th St N, Collinsville, OK".')
+@click.option("--lat", type=float, default=None, help="Latitude (use with --lon to skip geocoding).")
+@click.option("--lon", type=float, default=None, help="Longitude (use with --lat to skip geocoding).")
 @click.option("--output", "-o", default=None, help="Output PDF file path. Default: plinth_report_<id>.pdf")
 @click.option("--prepared-for", default="", help="Client name printed on the cover page.")
 @click.option("--mock", is_flag=True, default=False, help="Use hardcoded mock data (demo layout). Ignores --address.")
-def generate(address: str, output: str | None, prepared_for: str, mock: bool) -> None:
-    """Geocode an address, run all queries, and generate a PDF report.
+def generate(address: str | None, lat: float | None, lon: float | None,
+             output: str | None, prepared_for: str, mock: bool) -> None:
+    """Generate a site intelligence PDF report.
 
-    Pass --mock to generate a skeleton PDF with hardcoded demo data
-    (useful for layout validation).
+    Provide --address to geocode, OR --lat/--lon to skip geocoding.
+    Pass --mock to generate a skeleton PDF with hardcoded demo data.
     """
     if mock:
         click.echo("Rendering mock PDF skeleton (demo data — not live)…")
         context = MOCK_CONTEXT
     else:
-        # Step 7.11: geocode → build_context → render
-        click.echo(f"Geocoding: {address!r}…")
-        try:
-            lat, lon, formatted_address, city_state_zip, county = _geocode(address)
-        except Exception as exc:
-            click.echo(f"Geocoding failed: {exc}", err=True)
+        if lat is not None and lon is not None:
+            # Direct coordinates — reverse-geocode for county/state
+            click.echo(f"Using coordinates: {lat:.5f}°N, {lon:.5f}°W")
+            click.echo("  Reverse-geocoding for county/state…")
+            county, state = _reverse_geocode_census(lat, lon)
+            county_display = f"{county}, {state}" if county and state else county or state or ""
+            formatted_address = ""
+            city_state_zip = state
+
+            click.echo(f"  → {county_display or '(county unavailable)'}")
+        elif address:
+            click.echo(f"Geocoding: {address!r}…")
+            try:
+                lat, lon, formatted_address, city_state_zip, county_display = _geocode(address)
+            except Exception as exc:
+                click.echo(f"Geocoding failed: {exc}", err=True)
+                sys.exit(1)
+            click.echo(f"  → {lat:.5f}°N, {lon:.5f}°W  ({formatted_address})")
+        else:
+            click.echo("Error: provide --address or both --lat and --lon.", err=True)
             sys.exit(1)
 
-        click.echo(f"  → {lat:.5f}°N, {lon:.5f}°W  ({formatted_address})")
         click.echo("Running site queries…")
 
         from plinth.report.context import build_context
@@ -189,7 +233,7 @@ def generate(address: str, output: str | None, prepared_for: str, mock: bool) ->
                 lon=lon,
                 address=formatted_address,
                 city_state_zip=city_state_zip,
-                county=county,
+                county=county_display,
                 prepared_for=prepared_for,
             )
         except Exception as exc:

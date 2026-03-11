@@ -87,4 +87,11 @@ def fetch(lat: float, lon: float) -> dict[str, Any]:
     }
 
     set_cached(cache_key, _DATASET, result, _TTL_DAYS, lat=lat, lon=lon)
+
+    from plinth.db.registry import register_api_source
+    register_api_source(
+        _DATASET, version="WHP 2023 (270 m)",
+        update_frequency="on-demand", notes="Continuous index; LANDFIRE 2020 fuel conditions",
+    )
+
     return result

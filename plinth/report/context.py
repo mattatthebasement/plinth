@@ -358,9 +358,25 @@ def _build_wildfire(wf_q: dict) -> dict:
     }
 
 
+def _fmt_eng_rating(rating: str | None, limiters: list[str]) -> str:
+    """Format an engineering suitability rating with optional limiting factors.
+
+    Examples:
+      "Not limited"
+      "Very limited (limited by: depth to saturated zone, shrink-swell)"
+    """
+    if not rating:
+        return "—"
+    if not limiters:
+        return rating
+    limiter_str = ", ".join(l.lower() for l in limiters if l)
+    return f"{rating} (limited by: {limiter_str})"
+
+
 def _build_soil(soil_q: dict) -> dict:
     if not soil_q.get("available", False):
         return {
+            "available": False,
             "muname": "",
             "mukey": "",
             "hydrologic_group": "",
@@ -370,16 +386,54 @@ def _build_soil(soil_q: dict) -> dict:
             "dominant_component": "",
             "dominant_component_pct": None,
             "nearest_fallback": False,
+            # Physical
+            "flood_frequency": None,
+            "water_table_depth_cm": None,
+            "bedrock_depth_cm": None,
+            # Farmland & water
+            "land_capability_class": None,
+            "available_water_storage_in": None,
+            "erosion_hazard": None,
+            # Engineering suitability
+            "septic": "—",
+            "dwellings_no_basement": "—",
+            "dwellings_with_basement": "—",
+            "local_roads": "—",
         }
+
+    cointerp = soil_q.get("cointerp", {})
+
+    def _eng(key: str, fallback_rating: str | None) -> str:
+        ci = cointerp.get(key, {})
+        rating = ci.get("rating") or fallback_rating
+        limiters = ci.get("limiters", [])
+        return _fmt_eng_rating(rating, limiters)
+
     return {
+        "available": True,
         "muname": soil_q.get("muname", ""),
         "mukey": soil_q.get("mukey", ""),
+        # Physical conditions
         "hydrologic_group": soil_q.get("hydrologic_group", ""),
         "drainage_class": soil_q.get("drainage_class", ""),
         "slope_pct": soil_q.get("slope_pct"),
-        "taxonomic_class": soil_q.get("taxonomic_class", ""),
+        "flood_frequency": soil_q.get("flood_frequency"),
+        "water_table_depth_cm": soil_q.get("water_table_depth_cm"),
+        "bedrock_depth_cm": soil_q.get("bedrock_depth_cm"),
+        # Component
         "dominant_component": soil_q.get("dominant_component", ""),
         "dominant_component_pct": soil_q.get("dominant_component_pct"),
+        # Farmland & water
+        "land_capability_class": soil_q.get("land_capability_class"),
+        "available_water_storage_in": soil_q.get("available_water_storage_in"),
+        "erosion_hazard": soil_q.get("erosion_hazard"),
+        # Engineering suitability (cointerp limiters preferred; muaggatt dominant as fallback)
+        "septic": _eng("septic", soil_q.get("septic_rating")),
+        "dwellings_no_basement": _eng("dwellings_no_basement", soil_q.get("dwellings_no_basement_rating")),
+        "dwellings_with_basement": _eng("dwellings_with_basement", soil_q.get("dwellings_with_basement_rating")),
+        "local_roads": _eng("local_roads", soil_q.get("local_roads_rating")),
+        # Taxonomic classification
+        "taxonomic_class": soil_q.get("taxonomic_class", ""),
         "nearest_fallback": "flag" in soil_q,
     }
 
@@ -806,6 +860,44 @@ def _build_risk_summary(
 
     return rows
 
+_SOURCE_DISPLAY = {
+    "census-acs":          ("Census ACS (Demographics)", "API → cache"),
+    "census-tiger":        ("Census TIGER (Geometries)", "PostGIS"),
+    "epa-aqs":             ("EPA AQS (Air Quality)", "API → cache"),
+    "fcc-broadband":       ("FCC Broadband Availability", "PostGIS + API"),
+    "fema-nfhl":           ("FEMA NFHL (Flood Zones)", "PostGIS"),
+    "fema-nri":            ("FEMA National Risk Index", "PostGIS"),
+    "iecc-climate-zones":  ("IECC Climate Zones", "PostGIS"),
+    "nasa-power":          ("NASA POWER (Climate / Solar)", "API → cache"),
+    "nhd-hr":              ("NHDPlus HR (Hydrography)", "PostGIS"),
+    "nlcd":                ("NLCD (Land Cover)", "MinIO COG"),
+    "noaa-normals":        ("NOAA Climate Normals", "PostGIS"),
+    "usda-ssurgo":         ("USDA SSURGO (Soils)", "PostGIS"),
+    "usda-whp":            ("USDA Wildfire Hazard Potential", "API"),
+    "usgs-3dep":           ("USGS 3DEP (Elevation / Slope)", "MinIO COG"),
+    "usgs-eq":             ("USGS Earthquake Catalog", "API → cache"),
+    "usgs-seismic":        ("USGS Seismic Hazard (PGA)", "API → cache"),
+}
+
+
+def _build_sources_table() -> list[dict[str, str]]:
+    """Read data_source_registry and return rows for the template."""
+    from plinth.db.registry import get_all_sources
+
+    rows: list[dict[str, str]] = []
+    for src in get_all_sources():
+        key = src["source_name"]
+        display_name, storage = _SOURCE_DISPLAY.get(key, (key, "—"))
+        version = src.get("dataset_version") or "—"
+        refresh = src.get("update_frequency") or "—"
+        rows.append({
+            "name": display_name,
+            "version": version,
+            "refresh": refresh,
+            "storage": storage,
+        })
+    return rows
+
 
 # ── Main entry point ─────────────────────────────────────────────────────────
 
@@ -983,8 +1075,8 @@ def build_context(
         # Section 7 — Infrastructure & Access
         "infrastructure": infrastructure,
 
-        # Section 8 — Data Sources (populated in Step 7.10)
-        "sources": [],
+        # Section 8 — Data Sources
+        "sources": _build_sources_table(),
 
         # Maps (Mapbox Static Images, or None if unavailable)
         "maps": maps,

@@ -76,6 +76,13 @@ def fetch(lat: float, lon: float, county_fips: str) -> dict[str, Any]:
     }
 
     set_cached(cache_key, _DATASET, result, _TTL_DAYS, lat=lat, lon=lon)
+
+    from plinth.db.registry import register_api_source
+    register_api_source(
+        _DATASET, version=f"Annual Summary {year}",
+        update_frequency="on-demand", notes="County-level PM2.5 & ozone; 6–18 month lag",
+    )
+
     return result
 
 
