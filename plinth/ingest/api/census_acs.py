@@ -806,12 +806,19 @@ def fetch_area_weighted(
         else:
             failed_geoids.append(geoid)
 
-    if not acs_data:
-        flag = (
-            f"Census ACS API unreachable ({network_error})."
-            if network_error
-            else "Census ACS data unavailable for this area."
-        )
+    # Any missing block groups — network error or API no-data — make the
+    # area-weighted aggregation unreliable. Suppress entirely rather than
+    # showing numbers derived from incomplete coverage.
+    if not acs_data or failed_geoids:
+        if network_error:
+            flag = f"Census ACS API unreachable — demographic data suppressed."
+        elif not acs_data:
+            flag = "Census ACS returned no data for this area."
+        else:
+            flag = (
+                f"Census ACS data incomplete ({len(failed_geoids)} of {len(all_geoids)} "
+                "block groups unavailable) — demographic data suppressed."
+            )
         return {
             "available": False,
             "flag": flag,
@@ -820,16 +827,7 @@ def fetch_area_weighted(
             "groups": [],
         }
 
-    # Build a partial-data note if any block groups were excluded
-    partial_note: str = ""
-    if failed_geoids:
-        reason = "network error" if network_error else "API returned no data"
-        partial_note = (
-            f"{len(failed_geoids)} of {len(all_geoids)} block group(s) unavailable ({reason}); "
-            "values are area-weighted estimates from available data only."
-        )
-
-    # Aggregate for each radius
+    # All block groups fetched successfully — aggregate for each radius
     radii_order = ["1mi", "5mi", "10mi"]
     aggs: dict[str, dict[str, Any]] = {}
     for label in radii_order:
@@ -854,8 +852,6 @@ def fetch_area_weighted(
     return {
         "available": True,
         "note": (
-            partial_note
-            if partial_note else
             "Area-weighted block group intersections. "
             "Straight-line radius buffers — physical barriers not accounted for."
         ),

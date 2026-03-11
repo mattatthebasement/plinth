@@ -372,17 +372,12 @@
           <td>{{ soil.local_roads }}</td>
         </tr>
 
-        <tr class="ssurgo-group-header">
-          <td colspan="2">Classification</td>
-        </tr>
-        <tr>
-          <td>Taxonomic Class</td>
-          <td style="font-style:italic;">{{ soil.taxonomic_class or "—" }}</td>
-        </tr>
         {% if soil.nearest_fallback %}
+        <tr class="ssurgo-group-header">
+          <td colspan="2">Note</td>
+        </tr>
         <tr>
-          <td>Note</td>
-          <td>Nearest mapped unit returned — site may be in an unmapped area (e.g., active floodplain). Verify with <a href="https://websoilsurvey.sc.egov.usda.gov/">USDA Web Soil Survey</a>.</td>
+          <td colspan="2">Nearest mapped unit returned — site may be in an unmapped area (e.g., active floodplain). Verify with <a href="https://websoilsurvey.sc.egov.usda.gov/">USDA Web Soil Survey</a>.</td>
         </tr>
         {% endif %}
       </tbody>
@@ -858,6 +853,7 @@
   </div>
   {% endif %}
 
+  {% if demographics.available %}
   <p style="font-size:8pt;color:#444;margin-bottom:10pt;">
     {{ demographics.note }}
     Source: {{ demographics.acs_vintage }}.
@@ -898,6 +894,13 @@
     These data are presented for general context only and must not be used as a substitute
     for a formal market study or demographic analysis. Source: {{ demographics.acs_vintage }}.
   </div>
+
+  {% else %}
+  <div class="data-unavailable">
+    <strong>Demographic data unavailable.</strong>
+    {{ demographics.flag }}
+  </div>
+  {% endif %}
 </div>
 
 
