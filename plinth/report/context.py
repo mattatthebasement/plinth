@@ -748,7 +748,7 @@ def _build_solar(nasa_q: dict, lat: float, lon: float) -> dict:
 def _build_infrastructure(fcc_q: dict) -> dict:
     providers = []
     if fcc_q.get("available", False):
-        for p in fcc_q.get("providers", []):
+        for p in fcc_q.get("all_providers", []):
             providers.append({
                 "provider": p.get("brand_name", ""),
                 "technology": p.get("technology", ""),
@@ -886,23 +886,34 @@ def _build_risk_summary(
     return rows
 
 _SOURCE_DISPLAY = {
-    "census-acs":          ("Census ACS (Demographics)", "API → cache"),
-    "census-tiger":        ("Census TIGER (Geometries)", "PostGIS"),
-    "epa-aqs":             ("EPA AQS (Air Quality)", "API → cache"),
-    "fcc-broadband":       ("FCC Broadband Availability", "PostGIS + API"),
-    "fema-nfhl":           ("FEMA NFHL (Flood Zones)", "PostGIS"),
-    "fema-nri":            ("FEMA National Risk Index", "PostGIS"),
-    "iecc-climate-zones":  ("IECC Climate Zones", "PostGIS"),
-    "nasa-power":          ("NASA POWER (Climate / Solar)", "API → cache"),
-    "nhd-hr":              ("NHDPlus HR (Hydrography)", "PostGIS"),
-    "nlcd":                ("NLCD (Land Cover)", "MinIO COG"),
-    "noaa-normals":        ("NOAA Climate Normals", "PostGIS"),
-    "usda-ssurgo":         ("USDA SSURGO (Soils)", "PostGIS"),
-    "usda-whp":            ("USDA Wildfire Hazard Potential", "API"),
-    "usgs-3dep":           ("USGS 3DEP (Elevation / Slope)", "MinIO COG"),
-    "usgs-eq":             ("USGS Earthquake Catalog", "API → cache"),
-    "usgs-seismic":        ("USGS Seismic Hazard (PGA)", "API → cache"),
+    # ── Canonical bulk / local sources (what we show in the report) ──────────
+    # (display_name, storage, version_override_or_None)
+    "census-acs-bulk":       ("Census ACS (Demographics)",       "PostGIS",    "2019–2023 ACS 5-Year"),
+    "census-tiger":          ("Census TIGER (Geometries)",        "PostGIS",    None),
+    "epa-aqs-bulk":          ("EPA AQS (Air Quality)",            "PostGIS",    "2020–2024 Annual Summary"),
+    "fcc-broadband":         ("FCC Broadband Availability",       "PostGIS",    None),
+    "fema-nfhl":             ("FEMA NFHL (Flood Zones)",          "PostGIS",    None),
+    "fema-nri":              ("FEMA National Risk Index",         "PostGIS",    None),
+    "iecc-climate-zones":    ("IECC Climate Zones",               "PostGIS",    None),
+    "nasa-power-bulk":       ("NASA POWER (Climate / Solar)",     "PostGIS",    "2001–2020 Climatology"),
+    "nhd-hr":                ("NHDPlus HR (Hydrography)",         "PostGIS",    None),
+    "nlcd":                  ("NLCD (Land Cover)",                "MinIO COG",  None),
+    "noaa-normals":          ("NOAA Climate Normals",             "PostGIS",    None),
+    "usda-ssurgo":           ("USDA SSURGO (Soils)",              "PostGIS",    None),
+    "usda-whp":              ("USDA Wildfire Hazard Potential",   "MinIO COG",  None),
+    "usgs-3dep":             ("USGS 3DEP (Elevation / Slope)",    "MinIO COG",  None),
+    "usgs-earthquakes-bulk": ("USGS Earthquake Catalog",          "PostGIS",    None),
+    "usgs-seismic":          ("USGS Seismic Hazard (PGA)",        "MinIO COG",  None),
 }
+
+# Legacy registry entries superseded by their bulk/local counterparts.
+# These are still in data_source_registry but should not appear in the report.
+_SUPERSEDED_SOURCES = frozenset({
+    "census-acs",   # → census-acs-bulk
+    "epa-aqs",      # → epa-aqs-bulk
+    "nasa-power",   # → nasa-power-bulk
+    "usgs-eq",      # → usgs-earthquakes-bulk
+})
 
 
 def _build_sources_table() -> list[dict[str, str]]:
@@ -912,8 +923,14 @@ def _build_sources_table() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for src in get_all_sources():
         key = src["source_name"]
-        display_name, storage = _SOURCE_DISPLAY.get(key, (key, "—"))
-        version = src.get("dataset_version") or "—"
+        if key in _SUPERSEDED_SOURCES:
+            continue
+        entry = _SOURCE_DISPLAY.get(key)
+        if entry:
+            display_name, storage, version_override = entry
+        else:
+            display_name, storage, version_override = key, "—", None
+        version = version_override or src.get("dataset_version") or "—"
         refresh = src.get("update_frequency") or "—"
         rows.append({
             "name": display_name,
