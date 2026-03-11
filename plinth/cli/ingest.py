@@ -146,6 +146,20 @@ def ingest_fcc_broadband(region: str) -> None:
     FccBroadbandIngestor().run(region)
 
 
+@ingest.command("census-acs-bulk")
+@click.option("--year", default=2023, show_default=True,
+              help="ACS 5-year vintage year (e.g. 2023).")
+def ingest_census_acs_bulk(year: int) -> None:
+    """Bulk-ingest Census ACS 5-year estimates for all US block groups.
+
+    Downloads pre-built Summary File .dat tables from census.gov (no API key).
+    Loads all ~240k block groups nationally into acs_block_group_data.
+    """
+    from plinth.ingest.census_acs_bulk import CensusAcsBulkIngestor
+
+    CensusAcsBulkIngestor(year=year).run()
+
+
 def _require_ingestor(name: str) -> None:
     """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
     click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
