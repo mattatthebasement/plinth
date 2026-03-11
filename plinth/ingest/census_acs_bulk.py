@@ -86,20 +86,47 @@ class CensusAcsBulkIngestor(BaseIngestor):
     # ------------------------------------------------------------------
 
     def download(self, region: Optional[str] = None) -> None:
-        """Download one .dat file per ACS table prefix via ETag caching."""
+        """Download one .dat file per ACS table prefix via Last-Modified caching.
+
+        census.gov does not return ETag headers, so we use Last-Modified /
+        If-Modified-Since instead of the base class ETag helper.
+        """
+        import httpx
+
         self._downloaded = []
         self._missing = []
 
         for table_prefix in sorted(self._table_groups):
             url = _BASE_URL.format(year=self.year, table=table_prefix)
             dest = self.staging_dir / f"acsdt5y{self.year}-{table_prefix}.dat"
+            lm_file = dest.with_suffix(dest.suffix + ".lm")
+
+            headers: dict[str, str] = {}
+            if dest.exists() and lm_file.exists():
+                headers["If-Modified-Since"] = lm_file.read_text().strip()
+
             try:
-                fresh = self._download_if_changed(url, dest)
+                with httpx.stream(
+                    "GET", url, headers=headers, follow_redirects=True, timeout=300
+                ) as response:
+                    if response.status_code == 304:
+                        self._log(f"Cached    {table_prefix}")
+                        self._downloaded.append(table_prefix)
+                        continue
+
+                    response.raise_for_status()
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    with dest.open("wb") as fh:
+                        for chunk in response.iter_bytes(1024 * 1024):
+                            fh.write(chunk)
+
+                    last_modified = response.headers.get("last-modified", "")
+                    if last_modified:
+                        lm_file.write_text(last_modified)
+
                 self._downloaded.append(table_prefix)
-                if fresh:
-                    self._log(f"Downloaded {table_prefix} ({dest.stat().st_size:,} bytes)")
-                else:
-                    self._log(f"Cached    {table_prefix}")
+                self._log(f"Downloaded {table_prefix} ({dest.stat().st_size:,} bytes)")
+
             except Exception as exc:
                 self._log(f"ERROR downloading {table_prefix}: {exc}")
                 self._missing.append(table_prefix)
@@ -187,6 +214,10 @@ class CensusAcsBulkIngestor(BaseIngestor):
         ncols = 2 + len(db_cols)
         row_ph = f"({', '.join(['%s'] * ncols)})"
 
+        # PostgreSQL allows at most 65,535 bind parameters per query.
+        # Compute the max safe batch size for this table's column count.
+        safe_batch_size = max(1, 65535 // ncols)
+
         # SQL template; values placeholder filled per-batch
         sql_tmpl = (
             f"INSERT INTO acs_block_group_data ({col_list}) VALUES {{}} "
@@ -211,7 +242,7 @@ class CensusAcsBulkIngestor(BaseIngestor):
                     values.append(_parse_numeric(row.get(file_col)))
                 batch.append(tuple(values))
 
-                if len(batch) >= _BATCH_SIZE:
+                if len(batch) >= safe_batch_size:
                     _flush_batch(conn, sql_tmpl, batch, row_ph)
                     total += len(batch)
                     batch = []
