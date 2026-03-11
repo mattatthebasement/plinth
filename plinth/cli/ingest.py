@@ -117,15 +117,29 @@ def ingest_nlcd(region: str) -> None:
 
 
 @ingest.command("usgs-seismic")
-def ingest_usgs_seismic() -> None:
-    """Ingest USGS National Seismic Hazard Maps (PGA raster)."""
-    _require_ingestor("usgs-seismic")
+@click.option("--region", default="ne-oklahoma", show_default=True)
+def ingest_usgs_seismic(region: str) -> None:
+    """Ingest USGS NEHRP 2020 seismic design values raster.
+
+    Grid-samples the USGS Design Maps API at 0.05° intervals over the
+    region bbox and builds a 3-band COG (PGA/Ss/S1 in g) in MinIO.
+    """
+    from plinth.ingest.usgs_seismic_raster import UsgsSeismicRasterIngestor
+
+    UsgsSeismicRasterIngestor().run(region)
 
 
 @ingest.command("usda-whp")
-def ingest_usda_whp() -> None:
-    """Ingest USDA Wildfire Hazard Potential raster."""
-    _require_ingestor("usda-whp")
+@click.option("--region", default="ne-oklahoma", show_default=True)
+def ingest_usda_whp(region: str) -> None:
+    """Ingest USDA Wildfire Hazard Potential 2023 raster.
+
+    Clips the WHP 2023 continuous index from the USFS ImageServer
+    (imagery.geoplatform.gov), converts to COG, and stores in MinIO.
+    """
+    from plinth.ingest.usda_whp_raster import UsdaWhpRasterIngestor
+
+    UsdaWhpRasterIngestor().run(region)
 
 
 @ingest.command("noaa-normals")
