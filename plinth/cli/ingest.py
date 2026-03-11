@@ -186,6 +186,20 @@ def ingest_nasa_power_bulk() -> None:
     NasaPowerBulkIngestor().run()
 
 
+@ingest.command("usgs-earthquakes-bulk")
+@click.option("--min-mag", default=2.0, show_default=True, help="Minimum magnitude threshold.")
+def ingest_usgs_earthquakes_bulk(min_mag: float) -> None:
+    """Bulk-ingest USGS ComCat earthquake catalog for NE Oklahoma.
+
+    Fetches all M≥MIN_MAG events in the NE Oklahoma bounding box +1° buffer
+    via the USGS FDSN event API (single request, ~13k events total).
+    Staging file is refreshed daily.
+    """
+    from plinth.ingest.usgs_earthquakes_bulk import UsgsEarthquakesBulkIngestor
+
+    UsgsEarthquakesBulkIngestor(min_magnitude=min_mag).run()
+
+
 def _require_ingestor(name: str) -> None:
     """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
     click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
