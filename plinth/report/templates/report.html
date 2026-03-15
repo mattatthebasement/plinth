@@ -655,15 +655,33 @@
 
   <div class="kv-grid" style="margin-bottom:10pt;">
     <div class="kv-row">
-      <div class="kv-label">Climate Station</div>
-      <div class="kv-value">{{ climate.station_name }} ({{ climate.station_id }})</div>
-    </div>
-    <div class="kv-row">
-      <div class="kv-label">Distance from Site</div>
-      <div class="kv-value">{{ climate.distance_mi }} miles
-        {% if climate.distance_mi is not none and climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi; values may not reflect site microclimate</em>{% endif %}
+      <div class="kv-label">Temperature &amp; Precipitation Source</div>
+      <div class="kv-value">
+        {% if climate.gridded_source %}
+          {{ climate.gridded_source }}
+        {% elif climate.station_name %}
+          NOAA Climate Normals — {{ climate.station_name }} ({{ climate.station_id }}), {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site
+        {% else %}
+          Data unavailable
+        {% endif %}
       </div>
     </div>
+    {% if climate.station_name %}
+    <div class="kv-row">
+      <div class="kv-label">{% if climate.snow_in %}Snowfall &amp; {% endif %}Degree Days Source</div>
+      <div class="kv-value">
+        {% if climate.two_stations %}
+          Degree Days: NOAA Climate Normals — {{ climate.station_name }} ({{ climate.station_id }}), {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site
+          {% if climate.distance_mi is not none and climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi</em>{% endif %};
+          Snowfall: {{ climate.snow_station_name }} ({{ climate.snow_station_id }}), {{ climate.snow_distance_mi }} mi {{ climate.snow_bearing_dir }} from site
+          {% if climate.snow_distance_warn %}<em style="color:#666;"> — &gt;10 mi; values may not reflect site-level snowfall</em>{% endif %}
+        {% else %}
+          NOAA Climate Normals — {{ climate.station_name }} ({{ climate.station_id }}), {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site
+          {% if climate.distance_mi is not none and climate.distance_mi > 15 %}<em style="color:#666;"> — station &gt;15 mi; values may not reflect site microclimate</em>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
     <div class="kv-row">
       <div class="kv-label">Normals Period</div>
       <div class="kv-value">NOAA {{ climate.period }} Climate Normals</div>
@@ -714,10 +732,12 @@
         <td class="row-label">Precip (in)</td>
         {% for v in climate.prcp_in %}<td>{{ "—" if v is none else "%.2f"|format(v) }}</td>{% endfor %}
       </tr>
+      {% if climate.snow_in %}
       <tr>
         <td class="row-label">Snowfall (in)</td>
         {% for v in climate.snow_in %}<td>{{ "—" if v is none else "%.1f"|format(v) }}</td>{% endfor %}
       </tr>
+      {% endif %}
     </tbody>
   </table>
 
@@ -732,10 +752,35 @@
   </dl>
 
   <div class="inline-disclaimer">
-    Climate values are NOAA 1991–2020 climate normals measured at {{ climate.station_name }},
-    {{ climate.distance_mi }} miles from the site. Station-based normals may not reflect
-    site-level microclimatic variation due to local topography, urban heat island effects,
-    or distance from station. Source: NOAA National Centers for Environmental Information.
+    {% if climate.gridded_source %}
+      Temperature and precipitation values are NOAA NClimGrid 1991–2020 gridded normals interpolated
+      at the site location (~5 km resolution).
+      {% if climate.station_name %}
+        Heating/cooling degree days{% if climate.snow_in %} and snowfall{% endif %} are from the nearest NOAA Climate Normals station
+        {% if climate.two_stations %}
+          — degree days from {{ climate.station_name }} ({{ climate.station_id }}, {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site),
+          snowfall from {{ climate.snow_station_name }} ({{ climate.snow_station_id }}, {{ climate.snow_distance_mi }} mi {{ climate.snow_bearing_dir }} from site){% if climate.snow_distance_warn %}, which is more than 10 miles away; snowfall values may not reflect site-level conditions{% endif %}.
+        {% else %}
+          ({{ climate.station_name }}, {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site).
+          {% if not climate.snow_in %} Snowfall data not available within 15 miles of site.{% endif %}
+        {% endif %}
+      {% endif %}
+      Source: NOAA National Centers for Environmental Information.
+    {% else %}
+      Climate values are NOAA 1991–2020 climate normals from the nearest qualifying station.
+      {% if climate.two_stations %}
+        Temperature, precipitation, and degree days from {{ climate.station_name }} ({{ climate.station_id }}),
+        {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site.
+        Snowfall from {{ climate.snow_station_name }} ({{ climate.snow_station_id }}),
+        {{ climate.snow_distance_mi }} mi {{ climate.snow_bearing_dir }} from site{% if climate.snow_distance_warn %} — more than 10 miles away; snowfall values may not reflect site-level conditions{% endif %}.
+      {% else %}
+        Station: {{ climate.station_name }}, {{ climate.distance_mi }} mi {{ climate.bearing_dir }} from site.
+        {% if not climate.snow_in %} Snowfall data not available within 15 miles of site.{% endif %}
+      {% endif %}
+      Station-based normals may not reflect site-level microclimatic variation due to local topography,
+      urban heat island effects, or distance from station.
+      Source: NOAA National Centers for Environmental Information.
+    {% endif %}
   </div>
 </div>
 
@@ -972,7 +1017,390 @@
     </tbody>
   </table>
 
-  {# Road/Transit and Water/Sewer are not yet implemented — suppress until data is available #}
+  {# Road/Transit infrastructure is not yet implemented — suppress until data is available #}
+
+  {# ─── Electrical Infrastructure ─── #}
+  <h3 style="margin-top:18pt; page-break-before: always;">Electrical Infrastructure</h3>
+
+  {% if electric.available %}
+
+  {# ── Electric Utility Provider ── #}
+  <h4 style="margin-bottom:4pt;">Electric Utility Provider</h4>
+  {% if electric.dual_territory %}
+  <div class="inline-disclaimer" style="margin-bottom:6pt;">
+    This site appears to lie on or near a utility service territory boundary.
+    Both utilities are listed below — confirm which utility serves the site before proceeding with a service application.
+  </div>
+  {% endif %}
+  <div class="kv-grid" style="margin-bottom:10pt;">
+    {% for t in electric.service_territories %}
+    <div class="kv-row">
+      <div class="kv-label">Utility{% if electric.dual_territory %} {{ loop.index }}{% endif %}</div>
+      <div class="kv-value"><strong>{{ t.utility_name }}</strong> — {{ t.entity_type }}</div>
+    </div>
+    {% else %}
+    <div class="kv-row">
+      <div class="kv-label">Utility</div>
+      <div class="kv-value" style="color:#666; font-style:italic;">No service territory data found for this location.</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── Map ── #}
+  {% if maps.electric %}
+  <div style="margin: 8pt 0 10pt 0;">
+    <img src="{{ maps.electric }}" style="width:100%; border-radius:4px;" alt="Electrical infrastructure map">
+    <div style="font-size:7pt; color:#666; margin-top:3pt;">
+      Transmission lines colored by voltage class. Circle markers = power plants (colored by fuel type). Territory boundary shown when available. Sources: EIA-860, HIFLD.
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Transmission Lines ── #}
+  {% if electric.transmission_lines %}
+  <h4 style="margin-top:12pt; margin-bottom:4pt;">Nearest Transmission Lines</h4>
+  <table class="data-table avoid-break" style="margin-bottom:10pt;">
+    <thead>
+      <tr>
+        <th>Voltage Class</th>
+        <th style="text-align:right;">Nearest Distance</th>
+        <th>Owner / Operator</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in electric.transmission_lines %}
+      <tr>
+        <td>{{ line.voltage_class }} ({{ line.voltage_kv | int }} kV)</td>
+        <td style="text-align:right;">{{ line.distance_mi }} mi</td>
+        <td>{{ line.owner }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# ── Substations ── #}
+  {% if electric.substations_available %}
+  <h4 style="margin-top:12pt; margin-bottom:4pt;">Nearest Substations</h4>
+  <table class="data-table avoid-break" style="margin-bottom:10pt;">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th style="text-align:right;">Distance</th>
+        <th style="text-align:right;">Max Voltage</th>
+        <th style="text-align:right;">Lines</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in electric.substations %}
+      <tr>
+        <td>{{ s.display_name }}</td>
+        <td style="text-align:right;">{{ s.distance_mi }} mi</td>
+        <td style="text-align:right;">{% if s.max_voltage_kv %}{{ s.max_voltage_kv | int }} kV{% else %}—{% endif %}</td>
+        <td style="text-align:right;">{% if s.line_count %}{{ s.line_count }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {# ── Nearby Generation ── #}
+  {% if electric.nearby_plants %}
+  <h4 style="margin-top:12pt; margin-bottom:4pt;">Nearby Generating Capacity (within 25 mi, operating)</h4>
+  <div class="col-2" style="margin-bottom:10pt;">
+    <div class="col">
+      <table class="data-table avoid-break">
+        <thead>
+          <tr>
+            <th>Plant</th>
+            <th>Fuel</th>
+            <th style="text-align:right;">Capacity</th>
+            <th style="text-align:right;">Distance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in electric.nearby_plants %}
+          <tr>
+            <td>{{ p.plant_name }}</td>
+            <td>{{ p.fuel_label }}</td>
+            <td style="text-align:right;">{{ p.capacity_mw }} MW</td>
+            <td style="text-align:right;">{{ p.distance_mi }} mi</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="col">
+      <div class="kv-grid">
+        <div class="kv-row" style="background:#f8f8f8; font-weight:600;">
+          <div class="kv-label">Fuel Type</div>
+          <div class="kv-value">Total Capacity (within 25 mi)</div>
+        </div>
+        {% for f in electric.capacity_by_fuel %}
+        <div class="kv-row">
+          <div class="kv-label">{{ f.fuel }}</div>
+          <div class="kv-value">{{ f.capacity_mw }} MW</div>
+        </div>
+        {% endfor %}
+        <div class="kv-row" style="font-weight:600; border-top:1px solid #ddd;">
+          <div class="kv-label">Total</div>
+          <div class="kv-value">{{ electric.total_capacity_mw }} MW</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="inline-disclaimer">
+    Electric service territory data from HIFLD (Homeland Infrastructure Foundation-Level Data).
+    Transmission line and substation data from HIFLD.
+    Substation coverage is incomplete in HIFLD — absence of a substation entry does not indicate absence of infrastructure.
+    Power plant data from EIA Form 860 (annual survey of electric generators).
+    Verify all electrical service information directly with the identified utility before proceeding with development planning.
+    Sources: <a href="https://hifld-geoplatform.hub.arcgis.com/">HIFLD GeoData</a>,
+    <a href="https://www.eia.gov/electricity/data/eia860/">U.S. EIA Form EIA-860</a>.
+  </div>
+
+  {% else %}
+  <div style="color:#666; font-style:italic; margin-top:6pt;">Electrical infrastructure data unavailable for this location.</div>
+  {% endif %}
+
+  {# ─── Water & Utility Infrastructure ─── #}
+  <h3 style="margin-top:18pt; page-break-before: always;">Water &amp; Utility Infrastructure</h3>
+
+  {% if water.available %}
+
+  {# ── 7C-A: Drinking Water Utility ── #}
+  <h4 style="margin-bottom:4pt;">Drinking Water Utility</h4>
+  {% if water.service_system %}
+  {% set ss = water.service_system %}
+  {% if not ss.in_service_area and ss.dist_mi is not none %}
+  <div class="inline-disclaimer" style="margin-bottom:6pt;">
+    No public water system service area boundary was found containing this site.
+    The nearest system is shown below ({{ ss.dist_mi }} mi). Verify water service
+    availability directly with local utilities before proceeding.
+  </div>
+  {% endif %}
+  <div class="kv-grid" style="margin-bottom:10pt;">
+    <div class="kv-row">
+      <div class="kv-label">System Name</div>
+      <div class="kv-value"><strong>{{ ss.name }}</strong></div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">System Type</div>
+      <div class="kv-value">{{ ss.type or "—" }}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Water Source</div>
+      <div class="kv-value">{{ ss.source or "—" }}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Ownership</div>
+      <div class="kv-value">{{ ss.owner or "—" }}</div>
+    </div>
+    {% if ss.population %}
+    <div class="kv-row">
+      <div class="kv-label">Population Served</div>
+      <div class="kv-value">{{ "{:,}".format(ss.population) }}</div>
+    </div>
+    {% endif %}
+    {% if ss.connections %}
+    <div class="kv-row">
+      <div class="kv-label">Service Connections</div>
+      <div class="kv-value">{{ "{:,}".format(ss.connections) }}</div>
+    </div>
+    {% endif %}
+    <div class="kv-row">
+      <div class="kv-label">Health Violations (5 yr)</div>
+      <div class="kv-value">{{ ss.violations_5yr if ss.violations_5yr else "None reported" }}</div>
+    </div>
+  </div>
+  {% else %}
+  <div style="color:#666; font-style:italic; margin-bottom:10pt;">
+    No public water system data found within 20 miles of this site.
+  </div>
+  {% endif %}
+
+  {# Additional nearby systems #}
+  {% if water.additional_systems %}
+  <p style="font-size:8pt; color:#555; margin:0 0 4pt 0;">
+    <em>Additional nearby systems:</em>
+    {% for s in water.additional_systems %}
+    {{ s.name }}{% if s.dist_mi %} ({{ s.dist_mi }} mi){% endif %}{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </p>
+  {% endif %}
+
+  {# Water service area map #}
+  {% if maps.water_service %}
+  <div style="margin: 8pt 0 10pt 0;">
+    <img src="{{ maps.water_service }}" style="width:100%; border-radius:4px;" alt="Water service area map">
+    <div style="font-size:7pt; color:#666; margin-top:3pt;">
+      Water system service area boundaries (colored polygons). Site marked with star. Source: EPA Water System Boundaries, EPA SDWIS.
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── 7C-B: Groundwater Context ── #}
+  <h4 style="margin-top:14pt; margin-bottom:4pt;">Groundwater Context</h4>
+
+  {# Principal aquifer #}
+  {% if water.aquifer %}
+  {% set aq = water.aquifer %}
+  <div class="kv-grid" style="margin-bottom:10pt;">
+    <div class="kv-row">
+      <div class="kv-label">Principal Aquifer</div>
+      <div class="kv-value"><strong>{{ aq.name }}</strong></div>
+    </div>
+    {% if aq.type %}
+    <div class="kv-row">
+      <div class="kv-label">Aquifer Type</div>
+      <div class="kv-value">{{ aq.type }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="inline-disclaimer" style="margin-bottom:8pt;">
+    This site does not overlie a mapped principal aquifer.
+    The site may rely on local or minor aquifers not captured in this national dataset.
+  </div>
+  {% endif %}
+
+  {# Hydrogeologic province and region #}
+  {% if water.hydro_region %}
+  {% set hr = water.hydro_region %}
+  <div class="kv-grid" style="margin-bottom:6pt;">
+    <div class="kv-row">
+      <div class="kv-label">Hydrogeologic Province</div>
+      <div class="kv-value">{{ hr.prov_name }}</div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Hydrogeologic Region</div>
+      <div class="kv-value">
+        {{ hr.reg_name }}
+        {% if hr.reg_type == 'SHR' %}<span style="color:#777; font-weight:normal; font-size:8pt;"> — Secondary</span>{% endif %}
+      </div>
+    </div>
+    {% if hr.lithology %}
+    <div class="kv-row">
+      <div class="kv-label">Lithology</div>
+      <div class="kv-value">{{ hr.lithology }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% if hr.description %}
+  <div class="inline-disclaimer" style="margin-bottom:8pt;">
+    {{ hr.description }}
+    {% if hr.confidence == 'review' %}<span style="color:#999;"> (classification under review)</span>{% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# HydroFrame modeled WTD #}
+  {% if water.wtd %}
+  {% set wtd = water.wtd %}
+  <div class="kv-grid" style="margin-bottom:6pt;">
+    <div class="kv-row">
+      <div class="kv-label">Modeled Water Table Depth</div>
+      <div class="kv-value">
+        <strong>{{ wtd.depth_ft }} ft</strong> ({{ wtd.depth_m }} m)
+        {% if wtd.uncertainty_ft is not none %}
+          <span style="color:#777; font-size:8pt;"> ± {{ wtd.uncertainty_ft }} ft model uncertainty</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="kv-row">
+      <div class="kv-label">Source</div>
+      <div class="kv-value">{{ wtd.source }}</div>
+    </div>
+  </div>
+  <div class="inline-disclaimer" style="margin-bottom:8pt;">
+    {{ wtd.note }}
+  </div>
+  {% endif %}
+
+  {# Monitoring wells table #}
+  {% if water.wells %}
+  <h5 style="margin-top:12pt; margin-bottom:4pt; font-weight:600;">
+    USGS Monitoring Wells within 10 mi ({{ water.wells_count }} found,
+    {{ water.wells_with_dtw }} with historical depth-to-water statistics,
+    {{ water.wells_with_readings }} with recent observed readings)
+  </h5>
+  <table class="data-table avoid-break" style="margin-bottom:4pt; font-size:8pt;">
+    <thead>
+      <tr>
+        <th>Station</th>
+        <th style="text-align:right;">Dist (mi)</th>
+        <th style="text-align:right;">Well Depth (ft)</th>
+        <th style="text-align:right;">DTW Typical (ft)</th>
+        <th style="text-align:right;">DTW High (ft)</th>
+        <th style="text-align:right;">DTW Low (ft)</th>
+        <th>Period</th>
+        <th>Most Recent Reading</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in water.wells %}
+      <tr>
+        <td>{{ w.name | truncate(28, true, "…") }}</td>
+        <td style="text-align:right;">{{ w.dist_mi }}</td>
+        <td style="text-align:right;">{% if w.well_depth_ft %}{{ w.well_depth_ft }}{% else %}—{% endif %}</td>
+        <td style="text-align:right;">{% if w.dtw_typical_ft is not none %}{{ w.dtw_typical_ft }}{% else %}<span style="color:#aaa;">N/A</span>{% endif %}</td>
+        <td style="text-align:right;">{% if w.dtw_high_ft is not none %}{{ w.dtw_high_ft }}{% else %}—{% endif %}</td>
+        <td style="text-align:right;">{% if w.dtw_low_ft is not none %}{{ w.dtw_low_ft }}{% else %}—{% endif %}</td>
+        <td>{{ w.dtw_period or "—" }}</td>
+        <td>
+          {% if w.latest_reading %}
+            {% if w.latest_reading.depth_ft is not none %}
+              {{ w.latest_reading.depth_ft }} ft
+            {% else %}
+              —
+            {% endif %}
+            <span style="color:#666;">({{ w.latest_reading.qualifier or "Static" }}, {{ w.latest_reading.date }})</span>
+          {% else %}
+            <span style="color:#aaa;">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p style="font-size:7pt; color:#666; margin:0 0 8pt 0;">
+    DTW = Depth to Water. Typical = median of approved daily-value records (approved stations only).
+    High = shallowest recorded (wet-season high). Low = deepest recorded (dry-season low).
+    Most Recent Reading = latest discrete field measurement from USGS NWIS within the past 3 years
+    (parameter codes: 72019 standard, 62610 calibrated electric tape, 62611 analog recorder, 72150 alt electric tape — all in ft below land surface).
+    Qualifier indicates measurement condition: Static = well at rest (most reliable); Dry = no water present;
+    Pumping = well active (artificially depressed); Flowing = artesian (above land surface); others indicate
+    environmental interference. All depths in feet below ground surface (positive = deeper).
+  </p>
+  {% else %}
+  <div style="color:#666; font-style:italic; margin-bottom:8pt;">
+    No USGS monitoring wells found within 10 miles of this site.
+  </div>
+  {% endif %}
+
+  {# Groundwater map #}
+  {% if maps.groundwater %}
+  <div style="margin: 8pt 0 10pt 0;">
+    <img src="{{ maps.groundwater }}" style="width:100%; border-radius:4px;" alt="Groundwater context map">
+    <div style="font-size:7pt; color:#666; margin-top:3pt;">
+      Teal area = principal aquifer boundary. Blue dots = USGS wells with DTW data; gray dots = wells without DTW data. Site marked with star. Sources: USGS Principal Aquifers, USGS NWIS.
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="inline-disclaimer">
+    Drinking water service area data from EPA SDWIS and EPA Community Water System Boundaries. Service area boundaries are utility-supplied or EPA-modeled and may not reflect actual service territory. Verify water service availability directly with identified utilities. Violation counts are health-based violations in the prior 5 years; see EPA ECHO for full compliance history. Aquifer boundaries are from the USGS National Water Atlas (1:2,500,000 scale) and indicate general geological formation, not site-specific conditions. Well construction depth is not the same as water table depth. HydroFrame water table depth is a modeled estimate and should not be used as a substitute for hydrogeological investigation.
+    Sources: <a href="https://www.epa.gov/dwsixyearreview/safe-drinking-water-information-system-sdwis-federal-reporting-services">EPA SDWIS</a>,
+    <a href="https://waterdata.usgs.gov/nwis">USGS NWIS</a>,
+    <a href="https://doi.org/10.1038/s43247-025-03094-3">HydroFrame Ma et al. (2025)</a>.
+  </div>
+
+  {% else %}
+  <div style="color:#666; font-style:italic; margin-top:6pt;">Water infrastructure data unavailable for this location.</div>
+  {% endif %}
+
 </div>
 
 

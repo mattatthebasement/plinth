@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 import math
 import time
@@ -646,12 +647,21 @@ def _build_hydro(hydro_q: dict) -> dict:
     }
 
 
-def _build_climate(noaa_q: dict, nasa_q: dict) -> dict:
-    if not noaa_q.get("available", False):
+def _build_climate(noaa_q: dict, nasa_q: dict, nclimgrid_q: dict | None = None) -> dict:
+    gridded = nclimgrid_q or {}
+    use_gridded = gridded.get("available", False)
+
+    if not noaa_q.get("available", False) and not use_gridded:
         base = {
             "station_name": "",
             "station_id": "",
             "distance_mi": None,
+            "bearing_dir": None,
+            "snow_station_name": None,
+            "snow_station_id": None,
+            "snow_distance_mi": None,
+            "snow_bearing_dir": None,
+            "two_stations": False,
             "period": "1991–2020",
             "months": _MONTHS,
             "tmax_f": [None] * 12,
@@ -662,18 +672,28 @@ def _build_climate(noaa_q: dict, nasa_q: dict) -> dict:
             "cdd_annual": None,
             "rh_annual_pct": None,
             "freeze_thaw_days": None,
+            "gridded_source": None,
         }
         if nasa_q.get("available"):
             rh = nasa_q.get("rel_humidity", {})
             base["rh_annual_pct"] = round(rh.get("annual")) if rh.get("annual") is not None else None
         return base
 
-    tmax_f = _monthly_values(noaa_q.get("tmax_f"))
-    tmin_f = _monthly_values(noaa_q.get("tmin_f"))
-    prcp_in = _monthly_values(noaa_q.get("prcp_in"))
-    snow_in = _monthly_values(noaa_q.get("snow_in"))
-    hdd_monthly = _monthly_values(noaa_q.get("heating_degree_days"))
-    cdd_monthly = _monthly_values(noaa_q.get("cooling_degree_days"))
+    # --- Temperature and precipitation: prefer gridded NClimGrid ---
+    if use_gridded:
+        tmax_f = _monthly_values(gridded.get("tmax_f"))
+        tmin_f = _monthly_values(gridded.get("tmin_f"))
+        prcp_in = _monthly_values(gridded.get("prcp_in"))
+    else:
+        tmax_f = _monthly_values(noaa_q.get("tmax_f"))
+        tmin_f = _monthly_values(noaa_q.get("tmin_f"))
+        prcp_in = _monthly_values(noaa_q.get("prcp_in"))
+
+    # Snow, HDD, CDD — only available from station data
+    raw_snow = noaa_q.get("snow_in") if noaa_q.get("available") else None
+    snow_in = _monthly_values(raw_snow) if raw_snow is not None else None
+    hdd_monthly = _monthly_values(noaa_q.get("heating_degree_days")) if noaa_q.get("available") else [None] * 12
+    cdd_monthly = _monthly_values(noaa_q.get("cooling_degree_days")) if noaa_q.get("available") else [None] * 12
 
     hdd_annual = int(sum(v for v in hdd_monthly if v is not None))
     cdd_annual = int(sum(v for v in cdd_monthly if v is not None))
@@ -686,10 +706,20 @@ def _build_climate(noaa_q: dict, nasa_q: dict) -> dict:
         if ann is not None:
             rh_annual_pct = round(ann)
 
+    # Determine whether a separate snow station was used
+    two_stations = bool(noaa_q.get("available") and noaa_q.get("snow_station_id"))
+
     result: dict[str, Any] = {
-        "station_name": noaa_q.get("station_name", ""),
-        "station_id": noaa_q.get("station_id", ""),
-        "distance_mi": noaa_q.get("distance_mi"),
+        "station_name": noaa_q.get("station_name", "") if noaa_q.get("available") else "",
+        "station_id": noaa_q.get("station_id", "") if noaa_q.get("available") else "",
+        "distance_mi": noaa_q.get("distance_mi") if noaa_q.get("available") else None,
+        "bearing_dir": noaa_q.get("bearing_dir") if noaa_q.get("available") else None,
+        "snow_station_name": noaa_q.get("snow_station_name") if two_stations else None,
+        "snow_station_id": noaa_q.get("snow_station_id") if two_stations else None,
+        "snow_distance_mi": noaa_q.get("snow_distance_mi") if two_stations else None,
+        "snow_bearing_dir": noaa_q.get("snow_bearing_dir") if two_stations else None,
+        "snow_distance_warn": noaa_q.get("snow_distance_warn", False),
+        "two_stations": two_stations,
         "period": "1991–2020",
         "months": _MONTHS,
         "tmax_f": tmax_f,
@@ -700,6 +730,7 @@ def _build_climate(noaa_q: dict, nasa_q: dict) -> dict:
         "cdd_annual": cdd_annual,
         "rh_annual_pct": rh_annual_pct,
         "freeze_thaw_days": freeze_thaw,
+        "gridded_source": gridded.get("source") if use_gridded else None,
     }
     return result
 
@@ -770,6 +801,44 @@ def _build_infrastructure(fcc_q: dict) -> dict:
         "water_sewer_note": (
             "Verify water and sewer service availability directly with local utility providers."
         ),
+    }
+
+
+def _build_electric(elec_q: dict) -> dict:
+    """Build electric infrastructure context for the report template."""
+    if not elec_q.get("available", False):
+        return {"available": False}
+
+    # Entity type display labels
+    _entity_labels = {
+        "INVESTOR OWNED": "Investor-Owned Utility (IOU)",
+        "COOPERATIVE": "Electric Cooperative",
+        "MUNICIPAL": "Municipal Utility",
+        "POLITICAL SUBDIVISION": "Political Subdivision",
+        "STATE": "State Utility",
+        "FEDERAL": "Federal Utility",
+    }
+
+    territories = []
+    for t in elec_q.get("service_territories", []):
+        territories.append({
+            "utility_name": t["utility_name"],
+            "eia_id": t["eia_id"],
+            "entity_type_raw": t["entity_type"],
+            "entity_type": _entity_labels.get(t["entity_type"].upper(), t["entity_type"].title()),
+            "state": t["state"],
+        })
+
+    return {
+        "available": True,
+        "service_territories": territories,
+        "dual_territory": elec_q.get("dual_territory", False),
+        "substations": elec_q.get("substations", []),
+        "substations_available": bool(elec_q.get("substations")),
+        "transmission_lines": elec_q.get("transmission_lines", []),
+        "nearby_plants": elec_q.get("nearby_plants", []),
+        "capacity_by_fuel": elec_q.get("capacity_by_fuel", []),
+        "total_capacity_mw": elec_q.get("total_capacity_mw", 0),
     }
 
 
@@ -893,25 +962,209 @@ def _build_risk_summary(
 
     return rows
 
+
+# ── Code tables for water infrastructure ─────────────────────────────────────
+
+_PWS_TYPE_LABELS: dict[str, str] = {
+    "CWS":  "Community Water System",
+    "NTNC": "Non-Transient Non-Community",
+    "TNC":  "Transient Non-Community",
+}
+
+_SOURCE_TYPE_LABELS: dict[str, str] = {
+    "GW":  "Groundwater",
+    "SW":  "Surface Water",
+    "GU":  "Groundwater Under Direct Surface Influence",
+    "SWP": "Purchased Surface Water",
+    "GWP": "Purchased Groundwater",
+    "GUP": "Purchased Groundwater Under Surface Influence",
+}
+
+_OWNER_TYPE_LABELS: dict[str, str] = {
+    "F": "Federal",
+    "L": "Local Government",
+    "M": "Public/Private",
+    "N": "Native American",
+    "P": "Private",
+    "S": "State",
+}
+
+
+def _fmt_dtw_period(start: Any, end: Any) -> str | None:
+    if not start and not end:
+        return None
+    sy = str(start)[:4] if start else "?"
+    ey = str(end)[:4] if end else "?"
+    return sy if sy == ey else f"{sy}–{ey}"
+
+
+def _build_water(water_q: dict) -> dict:
+    """Build Water & Utility Infrastructure context for the report template."""
+    if not water_q.get("available", False):
+        return {"available": False, "flag": water_q.get("flag", "Water data unavailable.")}
+
+    # ── Primary service system ────────────────────────────────────────────────
+    combined = water_q.get("service_systems") or water_q.get("nearby_systems") or []
+    service_system = None
+    if combined:
+        s = combined[0]
+        service_system = {
+            "pwsid":           s.get("pwsid"),
+            "name":            s.get("pws_name"),
+            "type":            _PWS_TYPE_LABELS.get(s.get("pws_type_code", ""), s.get("pws_type_code")),
+            "source":          _SOURCE_TYPE_LABELS.get(s.get("primary_source", ""), s.get("primary_source")),
+            "owner":           _OWNER_TYPE_LABELS.get(s.get("owner_type_code", ""), s.get("owner_type_code")),
+            "population":      s.get("population_served"),
+            "connections":     s.get("service_connections"),
+            "violations_5yr":  s.get("violation_count_5yr") or 0,
+            "in_service_area": water_q.get("site_in_service_area"),
+            "dist_mi":         round(float(s["dist_mi"]), 1) if s.get("dist_mi") is not None else None,
+        }
+
+    # GeoJSON polygons for service area map (up to 4)
+    service_geojsons: list[dict] = []
+    for s in combined[:4]:
+        raw = s.get("geom_json")
+        if raw:
+            try:
+                service_geojsons.append(json.loads(raw) if isinstance(raw, str) else raw)
+            except Exception:
+                pass
+
+    # Additional systems (beyond the primary)
+    additional_systems: list[dict] = []
+    for s in combined[1:4]:
+        additional_systems.append({
+            "pwsid":  s.get("pwsid"),
+            "name":   s.get("pws_name"),
+            "type":   _PWS_TYPE_LABELS.get(s.get("pws_type_code", ""), s.get("pws_type_code")),
+            "source": _SOURCE_TYPE_LABELS.get(s.get("primary_source", ""), s.get("primary_source")),
+            "dist_mi": round(float(s["dist_mi"]), 1) if s.get("dist_mi") is not None else None,
+        })
+
+    # ── Principal aquifer ─────────────────────────────────────────────────────
+    aquifer = None
+    aq = water_q.get("aquifer")
+    if aq:
+        raw_geom = aq.get("geom_json")
+        aquifer = {
+            "name":          aq.get("aq_name"),
+            "type":          aq.get("aquifer_type"),
+            "rock_type":     aq.get("rock_type"),
+            "is_containing": aq.get("is_containing", False),
+            "dist_mi":       round(float(aq["dist_mi"]), 1) if aq.get("dist_mi") is not None else None,
+            "geom_json":     (json.loads(raw_geom) if isinstance(raw_geom, str) else raw_geom) if raw_geom else None,
+        }
+
+    # ── Groundwater monitoring wells ──────────────────────────────────────────
+    wells = []
+    for w in water_q.get("wells", []):
+        dtw_median = w.get("dtw_median_ft")
+        dtw_min    = w.get("dtw_min_ft")   # shallowest (wet season high)
+        dtw_max    = w.get("dtw_max_ft")   # deepest    (dry season low)
+
+        # Format recent discrete readings
+        readings = []
+        for r in w.get("readings", []):
+            lev_va = r.get("lev_va")
+            readings.append({
+                "date":      r.get("lev_dt", ""),
+                "depth_ft":  round(lev_va, 1) if lev_va is not None else None,
+                "method":    r.get("parameter_code"),
+                "qualifier": r.get("qualifier"),
+            })
+
+        wells.append({
+            "site_no":        w.get("site_no"),
+            "name":           w.get("station_nm") or f"USGS {w.get('site_no')}",
+            "dist_mi":        round(float(w["dist_mi"]), 1) if w.get("dist_mi") is not None else None,
+            "well_depth_ft":  round(w["well_depth_ft"]) if w.get("well_depth_ft") is not None else None,
+            "dtw_typical_ft": round(dtw_median) if dtw_median is not None else None,
+            "dtw_high_ft":    round(dtw_min)    if dtw_min    is not None else None,
+            "dtw_low_ft":     round(dtw_max)    if dtw_max    is not None else None,
+            "dtw_period":     _fmt_dtw_period(w.get("dtw_period_start"), w.get("dtw_period_end")),
+            "aquifer_cd":     w.get("nat_aqfr_cd") or w.get("aquifer_cd"),
+            "lat":            w.get("well_lat"),
+            "lon":            w.get("well_lon"),
+            "readings":       readings,
+            "has_readings":   bool(readings),
+            "latest_reading": readings[0] if readings else None,
+        })
+
+    wells_with_dtw = sum(1 for w in wells if w["dtw_typical_ft"] is not None)
+    wells_with_readings = sum(1 for w in wells if w["has_readings"])
+
+    # ── HydroFrame modeled water table depth ─────────────────────────────────
+    wtd_display = None
+    wtd = water_q.get("wtd", {}) or {}
+    if wtd.get("available"):
+        wtd_display = {
+            "depth_ft":       wtd.get("wtd_ft"),
+            "depth_m":        wtd.get("wtd_m"),
+            "uncertainty_ft": wtd.get("uncertainty_ft"),
+            "uncertainty_m":  wtd.get("uncertainty_m"),
+            "note":           wtd.get("note"),
+            "source":         wtd.get("source"),
+        }
+
+    # ── Hydrogeologic region ──────────────────────────────────────────────────
+    hydro_region_display = None
+    hr = water_q.get("hydro_region")
+    if hr:
+        hydro_region_display = {
+            "prov_name":   hr.get("prov_name"),
+            "reg_name":    hr.get("reg_name"),
+            "reg_type":    hr.get("reg_type"),    # PA or SHR
+            "lithology":   hr.get("lithology"),
+            "description": hr.get("reg_description"),
+            "confidence":  hr.get("reg_confidence", "high"),
+        }
+
+    return {
+        "available":            True,
+        "service_system":       service_system,
+        "service_geojsons":     service_geojsons,
+        "additional_systems":   additional_systems,
+        "site_in_service_area": water_q.get("site_in_service_area"),
+        "aquifer":              aquifer,
+        "hydro_region":         hydro_region_display,
+        "wells":                wells,
+        "wells_count":          len(wells),
+        "wells_with_dtw":       wells_with_dtw,
+        "wells_with_readings":  wells_with_readings,
+        "wtd":                  wtd_display,
+    }
+
+
 _SOURCE_DISPLAY = {
     # ── Canonical bulk / local sources (what we show in the report) ──────────
     # (display_name, storage, version_override_or_None)
-    "census-acs-bulk":       ("Census ACS (Demographics)",       "PostGIS",    "2019–2023 ACS 5-Year"),
-    "census-tiger":          ("Census TIGER (Geometries)",        "PostGIS",    None),
-    "epa-aqs-bulk":          ("EPA AQS (Air Quality)",            "PostGIS",    "2020–2024 Annual Summary"),
-    "fcc-broadband":         ("FCC Broadband Availability",       "PostGIS",    None),
-    "fema-nfhl":             ("FEMA NFHL (Flood Zones)",          "PostGIS",    None),
-    "fema-nri":              ("FEMA National Risk Index",         "PostGIS",    None),
-    "iecc-climate-zones":    ("IECC Climate Zones",               "PostGIS",    None),
-    "nasa-power-bulk":       ("NASA POWER (Climate / Solar)",     "PostGIS",    "2001–2020 Climatology"),
-    "nhd-hr":                ("NHDPlus HR (Hydrography)",         "PostGIS",    None),
-    "nlcd":                  ("NLCD (Land Cover)",                "MinIO COG",  None),
-    "noaa-normals":          ("NOAA Climate Normals",             "PostGIS",    None),
-    "usda-ssurgo":           ("USDA SSURGO (Soils)",              "PostGIS",    None),
-    "usda-whp":              ("USDA Wildfire Hazard Potential",   "MinIO COG",  None),
-    "usgs-3dep":             ("USGS 3DEP (Elevation / Slope)",    "MinIO COG",  None),
-    "usgs-earthquakes-bulk": ("USGS Earthquake Catalog",          "PostGIS",    None),
-    "usgs-seismic":          ("USGS Seismic Hazard (PGA)",        "MinIO COG",  None),
+    "census-acs-bulk":            ("Census ACS (Demographics)",                          "PostGIS",   "2019–2023 ACS 5-Year"),
+    "census-tiger":               ("Census TIGER (Geometries)",                          "PostGIS",   None),
+    "eia-860":                    ("EIA-860 Electric Power Plants & Generators",         "PostGIS",   None),
+    "epa-aqs-bulk":               ("EPA AQS (Air Quality)",                              "PostGIS",   "2020–2024 Annual Summary"),
+    "epa-sdwis":                  ("EPA Safe Drinking Water Information System (SDWIS)", "PostGIS",   None),
+    "epa-water-boundaries":       ("EPA Water System Service Boundaries",                "PostGIS",   None),
+    "fcc-broadband":              ("FCC Broadband Availability",                         "PostGIS",   None),
+    "fema-nfhl":                  ("FEMA NFHL (Flood Zones)",                            "PostGIS",   None),
+    "fema-nri":                   ("FEMA National Risk Index",                           "PostGIS",   None),
+    "hifld-electric-territories": ("Electric Utility Service Territories (DHS HIFLD)",  "PostGIS",   None),
+    "hifld-substations":          ("Electric Power Substations (DHS HIFLD)",             "PostGIS",   None),
+    "hifld-transmission-lines":   ("Electric Transmission Lines (DHS HIFLD)",            "PostGIS",   None),
+    "ma-wtd":                     ("Ma et al. (2026) Water Table Depth",                "MinIO COG", "2025"),
+    "iecc-climate-zones":         ("IECC Climate Zones",                                 "PostGIS",   None),
+    "nasa-power-bulk":            ("NASA POWER (Climate / Solar)",                       "PostGIS",   "2001–2020 Climatology"),
+    "nhd-hr":                     ("NHDPlus HR (Hydrography)",                           "PostGIS",   None),
+    "nlcd":                       ("NLCD (Land Cover)",                                  "MinIO COG", None),
+    "noaa-nclimgrid":             ("NOAA Monthly Gridded Climate Normals 1991–2020 (NClimGrid)", "MinIO COG", "1991–2020"),
+    "noaa-normals":               ("NOAA Climate Normals",                               "PostGIS",   None),
+    "usda-ssurgo":                ("USDA SSURGO (Soils)",                                "PostGIS",   None),
+    "usda-whp":                   ("USDA Wildfire Hazard Potential",                     "MinIO COG", None),
+    "usgs-3dep":                  ("USGS 3DEP (Elevation / Slope)",                      "MinIO COG", None),
+    "usgs-aquifers":              ("USGS Principal Aquifers",                            "PostGIS",   None),
+    "usgs-earthquakes-bulk":      ("USGS Earthquake Catalog",                            "PostGIS",   None),
+    "usgs-groundwater-wells":     ("USGS NWIS Groundwater Wells",                       "PostGIS",   None),
+    "usgs-seismic":               ("USGS Seismic Hazard (PGA)",                          "MinIO COG", None),
 }
 
 # Legacy registry entries superseded by their bulk/local counterparts.
@@ -992,6 +1245,8 @@ def build_context(
                           fallback={"available": False, "flag": "Hydrography data unavailable."}, timings=timings)
     noaa_q = _safe_query("noaa_normals", q_module.query_noaa_normals, lat, lon,
                          fallback={"available": False, "flag": "NOAA climate data unavailable."}, timings=timings)
+    nclimgrid_q = _safe_query("noaa_nclimgrid", q_module.query_noaa_nclimgrid, lat, lon,
+                              fallback={"available": False, "flag": "NClimGrid data unavailable."}, timings=timings)
     elev_q = _safe_query("elevation", q_module.query_elevation, lat, lon,
                          fallback={"available": False, "flag": "Elevation data unavailable."}, timings=timings)
     slope_q = _safe_query("slope", q_module.query_slope, lat, lon,
@@ -1010,6 +1265,10 @@ def build_context(
                         fallback={"available": False, "flag": "EPA AQS data unavailable."}, timings=timings)
     fcc_q = _safe_query("fcc_broadband", q_module.query_fcc_broadband, lat, lon,
                         fallback={"available": False, "flag": "FCC broadband data unavailable."}, timings=timings)
+    elec_q = _safe_query("electric_infrastructure", q_module.query_electric_infrastructure, lat, lon,
+                         fallback={"available": False}, timings=timings)
+    water_q = _safe_query("water_infrastructure", q_module.query_water_infrastructure, lat, lon,
+                          fallback={"available": False}, timings=timings)
 
     # ── Transform each section ────────────────────────────────────────────
     flood = _build_flood(flood_q)
@@ -1022,9 +1281,11 @@ def build_context(
     slope = _build_slope(slope_q)
     land_cover = _build_land_cover(lc_q)
     hydro = _build_hydro(hydro_q)
-    climate = _build_climate(noaa_q, nasa_q)
+    climate = _build_climate(noaa_q, nasa_q, nclimgrid_q)
     solar = _build_solar(nasa_q, lat, lon)
     infrastructure = _build_infrastructure(fcc_q)
+    electric = _build_electric(elec_q)
+    water = _build_water(water_q)
     iecc_zone, iecc_description = _build_iecc(iecc_q)
 
     # ── Demographics ──────────────────────────────────────────────────────
@@ -1070,13 +1331,21 @@ def build_context(
     # ── Maps ──────────────────────────────────────────────────────────────
     _t0_maps = time.perf_counter()
     try:
-        from plinth.report.maps import fetch_all_maps, fetch_demographics_map_b64, fetch_demographics_closeup_map_b64
+        from plinth.report.maps import (
+            fetch_all_maps, fetch_demographics_map_b64,
+            fetch_demographics_closeup_map_b64, fetch_electric_map_b64,
+            fetch_water_service_map_b64, fetch_groundwater_map_b64,
+        )
         maps = fetch_all_maps(lat, lon)
         maps["demographics"] = fetch_demographics_map_b64(lat, lon)
         maps["demographics_closeup"] = fetch_demographics_closeup_map_b64(lat, lon)
+        maps["electric"] = fetch_electric_map_b64(lat, lon, elec_q)
+        maps["water_service"] = fetch_water_service_map_b64(lat, lon, water)
+        maps["groundwater"] = fetch_groundwater_map_b64(lat, lon, water)
     except Exception as exc:
         log.warning("Map fetch failed: %s", exc)
-        maps = {"cover": None, "terrain": None, "solar": None, "demographics": None}
+        maps = {"cover": None, "terrain": None, "solar": None, "demographics": None,
+                "electric": None, "water_service": None, "groundwater": None}
     timings["maps"] = time.perf_counter() - _t0_maps
 
     # Strip internal key before returning
@@ -1127,6 +1396,8 @@ def build_context(
 
         # Section 7 — Infrastructure & Access
         "infrastructure": infrastructure,
+        "electric": electric,
+        "water": water,
 
         # Section 8 — Data Sources
         "sources": _build_sources_table(),

@@ -182,9 +182,9 @@ def _reverse_geocode_census(lat: float, lon: float) -> tuple[str, str]:
 
 # ─── Query categories for the timing display ─────────────────────────────────
 _QUERY_GROUPS: list[tuple[str, list[str]]] = [
-    ("Vector queries", ["flood_zone", "fema_nri", "iecc_zone", "census_block_groups", "soil", "hydro", "noaa_normals"]),
-    ("Raster queries", ["elevation", "slope", "land_cover", "seismic_pga", "wildfire_whp"]),
-    ("API queries",    ["nasa_power", "earthquakes", "epa_aqs", "fcc_broadband"]),
+    ("Vector queries", ["flood_zone", "fema_nri", "iecc_zone", "census_block_groups", "soil", "hydro", "noaa_normals", "fcc_broadband"]),
+    ("Raster queries", ["elevation", "slope", "land_cover", "seismic_pga", "wildfire_whp", "noaa_nclimgrid"]),
+    ("API queries",    ["nasa_power", "earthquakes", "epa_aqs"]),
     ("Demographics",   ["demographics"]),
     ("Maps",           ["maps"]),
 ]

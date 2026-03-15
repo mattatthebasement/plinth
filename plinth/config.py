@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     epa_aqs_email: str = ""
     fcc_api_token: str = ""
     fcc_username: str = ""
+    usgs_api_key: str = ""  # api.waterdata.usgs.gov — 1,000 req/hr with key
 
     # Regional bounding box (NE Oklahoma for POC)
     region_bbox_minx: float = -96.5

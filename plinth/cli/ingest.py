@@ -33,6 +33,20 @@ def ingest_all(region: str) -> None:
     from plinth.ingest.fcc_broadband import FccBroadbandIngestor
     from plinth.ingest.noaa_normals import NoaaNormalsIngestor
 
+    from plinth.ingest.noaa_nclimgrid import NoaaNclimgridIngestor
+    from plinth.ingest.eia_860 import Eia860Ingestor
+    from plinth.ingest.hifld_electric_territories import HifldElectricTerritoriesIngestor
+    from plinth.ingest.hifld_transmission_lines import HifldTransmissionLinesIngestor
+    from plinth.ingest.hifld_substations import HifldSubstationsIngestor
+    from plinth.ingest.epa_sdwis import EpaSdwisIngestor
+    from plinth.ingest.epa_water_boundaries import EpaWaterBoundariesIngestor
+    from plinth.ingest.usgs_aquifers import UsgsAquifersIngestor
+    from plinth.ingest.usgs_groundwater_wells import UsgsGroundwaterWellsIngestor
+    from plinth.ingest.ma_wtd import MaWtdIngestor
+
+    from plinth.ingest.usgs_hydrogeologic_framework import UsgsHydrogeologicFrameworkIngestor
+    from plinth.ingest.soilgrids_bedrock import SoilgridsBedrockIngestor
+
     CensusTigerIngestor().run(region)
     FemaNfhlIngestor().run(region)
     IeccIngestor().run()
@@ -42,13 +56,28 @@ def ingest_all(region: str) -> None:
     NoaaNormalsIngestor().run()
     FccBroadbandIngestor().run(region)
 
-    click.echo("All Phase 2 ingestors complete.")
+    # National datasets (no region parameter)
+    NoaaNclimgridIngestor().run()
+    Eia860Ingestor().run()
+    HifldElectricTerritoriesIngestor().run()
+    HifldTransmissionLinesIngestor().run()
+    HifldSubstationsIngestor().run()
+    EpaSdwisIngestor().run()
+    EpaWaterBoundariesIngestor().run()
+    UsgsAquifersIngestor().run()
+    UsgsGroundwaterWellsIngestor().run()
+    UsgsHydrogeologicFrameworkIngestor().run()
+    SoilgridsBedrockIngestor().run()
+    MaWtdIngestor().run()
+
+    click.echo("All ingestors complete.")
 
 
 @ingest.command("fema-nfhl")
-@click.option("--region", default="ne-oklahoma", show_default=True)
+@click.option("--region", default=None, show_default=True,
+              help="Named region (e.g. 'ne-oklahoma') or omit for national.")
 def ingest_fema_nfhl(region: str) -> None:
-    """Ingest FEMA National Flood Hazard Layer."""
+    """Ingest FEMA National Flood Hazard Layer (national by default)."""
     from plinth.ingest.fema_nfhl import FemaNfhlIngestor
 
     FemaNfhlIngestor().run(region)
@@ -214,9 +243,100 @@ def ingest_usgs_earthquakes_bulk(min_mag: float) -> None:
     UsgsEarthquakesBulkIngestor(min_magnitude=min_mag).run()
 
 
-def _require_ingestor(name: str) -> None:
-    """Print a not-yet-implemented notice (placeholder until Phase 2/3)."""
-    click.echo(f"  [{name}] ingestor not yet implemented (Phase 2/3).")
+@ingest.command("noaa-nclimgrid")
+def ingest_noaa_nclimgrid() -> None:
+    """Ingest NOAA NClimGrid 1991-2020 monthly gridded climate normals (national raster)."""
+    from plinth.ingest.noaa_nclimgrid import NoaaNclimgridIngestor
+
+    NoaaNclimgridIngestor().run()
+
+
+@ingest.command("eia-860")
+def ingest_eia_860() -> None:
+    """Ingest EIA-860 annual electric generator report (power plants, national)."""
+    from plinth.ingest.eia_860 import Eia860Ingestor
+
+    Eia860Ingestor().run()
+
+
+@ingest.command("hifld-electric-territories")
+def ingest_hifld_electric_territories() -> None:
+    """Ingest HIFLD electric retail service territory polygons (national)."""
+    from plinth.ingest.hifld_electric_territories import HifldElectricTerritoriesIngestor
+
+    HifldElectricTerritoriesIngestor().run()
+
+
+@ingest.command("hifld-transmission-lines")
+def ingest_hifld_transmission_lines() -> None:
+    """Ingest HIFLD electric transmission line segments (national)."""
+    from plinth.ingest.hifld_transmission_lines import HifldTransmissionLinesIngestor
+
+    HifldTransmissionLinesIngestor().run()
+
+
+@ingest.command("hifld-substations")
+def ingest_hifld_substations() -> None:
+    """Ingest HIFLD electric substation points (national)."""
+    from plinth.ingest.hifld_substations import HifldSubstationsIngestor
+
+    HifldSubstationsIngestor().run()
+
+
+@ingest.command("epa-sdwis")
+def ingest_epa_sdwis() -> None:
+    """Ingest EPA SDWIS public water system data (national, via ECHO bulk download)."""
+    from plinth.ingest.epa_sdwis import EpaSdwisIngestor
+
+    EpaSdwisIngestor().run()
+
+
+@ingest.command("epa-water-boundaries")
+def ingest_epa_water_boundaries() -> None:
+    """Ingest EPA CWS service area boundary polygons (national, ~44k systems)."""
+    from plinth.ingest.epa_water_boundaries import EpaWaterBoundariesIngestor
+
+    EpaWaterBoundariesIngestor().run()
+
+
+@ingest.command("usgs-aquifers")
+def ingest_usgs_aquifers() -> None:
+    """Ingest USGS principal aquifer polygons (national, 1:2.5M scale)."""
+    from plinth.ingest.usgs_aquifers import UsgsAquifersIngestor
+
+    UsgsAquifersIngestor().run()
+
+
+@ingest.command("usgs-groundwater-wells")
+def ingest_usgs_groundwater_wells() -> None:
+    """Ingest USGS NWIS groundwater monitoring wells with depth-to-water stats (national)."""
+    from plinth.ingest.usgs_groundwater_wells import UsgsGroundwaterWellsIngestor
+
+    UsgsGroundwaterWellsIngestor().run()
+
+
+@ingest.command("ma-wtd")
+def ingest_ma_wtd() -> None:
+    """Ingest Ma et al. (2025) CONUS water table depth COG (36.6 GB Zenodo download)."""
+    from plinth.ingest.ma_wtd import MaWtdIngestor
+
+    MaWtdIngestor().run()
+
+
+@ingest.command("usgs-hydrogeologic-framework")
+def ingest_usgs_hydrogeologic_framework() -> None:
+    """Ingest USGS 2025 hydrogeologic provinces and regions (national)."""
+    from plinth.ingest.usgs_hydrogeologic_framework import UsgsHydrogeologicFrameworkIngestor
+
+    UsgsHydrogeologicFrameworkIngestor().run()
+
+
+@ingest.command("soilgrids-bedrock")
+def ingest_soilgrids_bedrock() -> None:
+    """Ingest SoilGrids 250m depth-to-bedrock rasters (CONUS, via WCS)."""
+    from plinth.ingest.soilgrids_bedrock import SoilgridsBedrockIngestor
+
+    SoilgridsBedrockIngestor().run()
 
 
 @ingest.command("status")

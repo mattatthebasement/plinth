@@ -509,3 +509,274 @@ Table usgs_earthquake_events {
 
   Note: 'USGS ComCat earthquake catalog. M≥2.0 events within NE Oklahoma bounding box +1° buffer. Loaded from USGS FDSN event API (single bulk CSV export). 12,916 events loaded (1918–2026). Queried at report time via ST_DWithin with 80km radius, M≥3.0, last 50 years.'
 }
+
+// ============================================================
+// EIA Power Plants  (migration 010)
+// ============================================================
+
+Table eia_power_plants {
+  plant_id             integer   [pk, note: 'EIA Plant Code']
+  plant_name           text      [not null]
+  utility_id           integer   [note: 'EIA Utility ID — joins to electric_service_territories.eia_id']
+  utility_name         text
+  operator_name        text
+  state                char(2)
+  county               text
+  lat                  numeric(9,6)
+  lon                  numeric(9,6)
+  geom                 geometry(Point, 4326)
+  install_year         smallint
+  data_year            smallint  [not null]
+  capacity_mw_total    numeric   [note: 'Sum of all generator nameplate capacity (MW)']
+  capacity_mw_by_fuel  jsonb     [note: '{"NG": 450.0, "SUN": 200.0, ...} — sum by EIA fuel code']
+  primary_fuel         text      [note: 'EIA fuel code of highest-capacity generator']
+  technology_types     text[]    [note: 'Distinct technology types at this plant']
+  operating_status     text      [note: 'OP=operating, RE=retired, SB=standby, CN=construction']
+  created_at           timestamptz [default: `now()`]
+  updated_at           timestamptz [default: `now()`]
+
+  indexes {
+    geom           [type: gist, name: 'idx_eia_plants_geom']
+    primary_fuel   [name: 'idx_eia_plants_fuel']
+    operating_status [name: 'idx_eia_plants_status']
+  }
+
+  Note: 'EIA-860 Annual Electric Generator Report aggregated to plant level. ~10k plants nationally. Loaded annually from EIA-860 ZIP (eia.gov). Joined to electric_service_territories via utility_id for utility attribution.'
+}
+
+// ============================================================
+// HIFLD Electric Service Territories  (migration 010)
+// ============================================================
+
+Table electric_service_territories {
+  id          serial   [pk]
+  eia_id      text     [note: 'EIA utility ID — joins to eia_power_plants.utility_id']
+  utility_name text    [not null]
+  state       char(2)
+  naics_code  text
+  entity_type text     [note: 'IOU=investor-owned, COOP=cooperative, MUN=municipal, FED=federal, OTHER']
+  address     text
+  city        text
+  zip         text
+  phone       text
+  geom        geometry(MultiPolygon, 4326) [not null]
+  source_date text
+  created_at  timestamptz [default: `now()`]
+
+  indexes {
+    geom   [type: gist, name: 'idx_service_territories_geom']
+    eia_id [name: 'idx_service_territories_eia_id']
+  }
+
+  Note: 'HIFLD Electric Retail Service Territories. ~3,200 utility service area polygons (IOUs, co-ops, municipals, public power). ST_Contains(geom, site_point) identifies the serving utility. Joined to eia_power_plants via eia_id. Updated annually from HIFLD ArcGIS FeatureServer.'
+}
+
+// ============================================================
+// HIFLD Transmission Lines  (migration 010)
+// ============================================================
+
+Table electric_transmission_lines {
+  id            serial  [pk]
+  line_name     text
+  owner         text
+  voltage_kv    integer [note: 'Nominal voltage in kilovolts']
+  voltage_class text    [note: 'HIFLD voltage class: "100-161", "230", "345", "500", "735 And Above", etc.']
+  status        text    [note: '"IN SERVICE", "UNDER CONSTRUCTION", "PROPOSED", etc.']
+  geom          geometry(MultiLineString, 4326) [not null]
+  source_date   text
+  created_at    timestamptz [default: `now()`]
+
+  indexes {
+    geom      [type: gist, name: 'idx_transmission_lines_geom']
+    voltage_kv [name: 'idx_transmission_lines_voltage']
+  }
+
+  Note: 'HIFLD Electric Transmission Lines. ~70k line segments, 69kV and above. ST_DWithin used to find nearest line and voltage class. Updated annually from HIFLD ArcGIS FeatureServer.'
+}
+
+// ============================================================
+// HIFLD Electric Substations  (migration 010)
+// ============================================================
+
+Table electric_substations {
+  id          serial  [pk]
+  name        text
+  owner       text
+  city        text
+  state       char(2)
+  status      text    [note: '"IN SERVICE", "UNDER CONSTRUCTION", etc.']
+  lines       integer [note: 'Number of transmission/distribution lines at substation']
+  max_volt    integer [note: 'Maximum voltage (kV)']
+  min_volt    integer [note: 'Minimum voltage (kV)']
+  geom        geometry(Point, 4326) [not null]
+  source_date text
+  created_at  timestamptz [default: `now()`]
+
+  indexes {
+    geom [type: gist, name: 'idx_substations_geom']
+  }
+
+  Note: 'HIFLD Electric Substations. ~80k substation points (69kV+). Updated annually from HIFLD ArcGIS FeatureServer.'
+}
+
+// ============================================================
+// EPA SDWIS Water Systems  (migration 011)
+// ============================================================
+
+Table sdwis_water_systems {
+  pwsid               text    [pk, note: 'EPA Public Water System ID (e.g. OK3000001)']
+  pws_name            text    [not null]
+  pws_type_code       text    [note: 'CWS=community, NTNC=non-transient non-community']
+  primary_source      text    [note: 'GW=groundwater, SW=surface water, GU=groundwater under surface influence']
+  owner_type_code     text    [note: 'F=federal, L=local govt, M=municipal, N=nonprofit, P=private, S=state']
+  population_served   integer
+  service_connections integer
+  state_code          char(2)
+  primary_county      text
+  city_served         text
+  zip_codes           text[]  [note: 'ZIP codes in service area from GEOGRAPHIC_AREA.CSV']
+  counties_served     text[]  [note: 'County FIPS codes served, from SERVICE_AREA.CSV']
+  activity_code       text    [note: 'A=active, I=inactive']
+  violation_count_5yr integer [default: 0, note: 'Health-based violation count, last 5 years']
+  data_quarter        text    [note: 'SDWIS reporting quarter, e.g. "2025Q4"']
+  created_at          timestamptz [default: `now()`]
+  updated_at          timestamptz [default: `now()`]
+
+  indexes {
+    state_code      [name: 'idx_sdwis_state']
+    pws_type_code   [name: 'idx_sdwis_type']
+    primary_source  [name: 'idx_sdwis_source']
+    counties_served [type: gin, name: 'idx_sdwis_county']
+  }
+
+  Note: 'EPA SDWIS public water system registry via ECHO bulk download. CWS and NTNC systems only (~150k systems). Refreshed monthly. Join to water_system_boundaries via pwsid for spatial lookup.'
+}
+
+// ============================================================
+// EPA CWS Service Area Boundaries  (migration 011)
+// ============================================================
+
+Table water_system_boundaries {
+  id              serial  [pk]
+  pwsid           text    [not null, ref: > sdwis_water_systems.pwsid, note: 'Joins to sdwis_water_systems']
+  pws_name        text
+  boundary_source text    [note: '"state_supplied", "epa_modeled", "utility_supplied"']
+  state_code      char(2)
+  geom            geometry(MultiPolygon, 4326) [not null]
+  source_date     text
+  created_at      timestamptz [default: `now()`]
+
+  indexes {
+    geom  [type: gist, name: 'idx_water_boundaries_geom']
+    pwsid [name: 'idx_water_boundaries_pwsid']
+  }
+
+  Note: 'EPA CWS Service Area Boundaries. ~44k polygon boundaries (~99% consumer coverage). ST_Contains(geom, site_point) identifies the serving water system. Join via pwsid to sdwis_water_systems for system metadata. Updated annually from EPA ArcGIS FeatureServer.'
+}
+
+// ============================================================
+// USGS Principal Aquifers  (migration 012)
+// ============================================================
+
+Table usgs_principal_aquifers {
+  id           serial  [pk]
+  aq_name      text    [not null, note: 'Aquifer formation name, e.g. "High Plains aquifer"']
+  aq_code      text    [note: 'USGS aquifer code']
+  rock_type    text    [note: 'Formation rock type description']
+  aquifer_type text    [note: 'Classification: unconsolidated sand and gravel / semiconsolidated / sandstone / carbonate / other']
+  geom         geometry(MultiPolygon, 4326) [not null]
+  created_at   timestamptz [default: `now()`]
+
+  indexes {
+    geom [type: gist, name: 'idx_aquifers_geom']
+  }
+
+  Note: 'USGS Ground Water Atlas principal aquifer polygons. ~70 formation polygons at 1:2,500,000 national scale. ST_Intersects identifies the principal aquifer underlying any site. Note: national-scale data; local conditions vary significantly within each formation boundary.'
+}
+
+// ============================================================
+// USGS NWIS Groundwater Monitoring Wells  (migration 012)
+// ============================================================
+
+Table usgs_groundwater_wells {
+  site_no          text    [pk, note: 'USGS site number']
+  station_nm       text
+  state_cd         char(2)
+  county_cd        text
+  aquifer_cd       text    [note: 'USGS local aquifer code']
+  nat_aqfr_cd      text    [note: 'USGS national aquifer code — cross-references usgs_principal_aquifers']
+  well_depth_ft    numeric [note: 'Total well depth (ft)']
+  hole_depth_ft    numeric
+  geom             geometry(Point, 4326) [not null]
+  dtw_median_ft    numeric [note: 'Median depth to water below land surface (ft), parameter 72019']
+  dtw_mean_ft      numeric
+  dtw_min_ft       numeric [note: 'Shallowest recorded depth to water (ft below land surface)']
+  dtw_max_ft       numeric [note: 'Deepest recorded depth to water (ft below land surface)']
+  dtw_obs_count    integer [note: 'Number of depth-to-water observations used in statistics']
+  dtw_period_start date    [note: 'Start of period of record for depth-to-water data']
+  dtw_period_end   date
+  created_at       timestamptz [default: `now()`]
+  updated_at       timestamptz [default: `now()`]
+
+  indexes {
+    geom        [type: gist, name: 'idx_gw_wells_geom']
+    nat_aqfr_cd [name: 'idx_gw_wells_aquifer']
+    state_cd    [name: 'idx_gw_wells_state']
+  }
+
+  Note: '~914k USGS NWIS groundwater monitoring sites with pre-aggregated depth-to-water statistics (parameter 72019, ft below land surface). State-by-state download from waterservices.usgs.gov. Only ~142 sites nationally have approved daily-value records for pre-computed stats; dtw_* = NULL for the rest. Recent discrete readings in usgs_groundwater_well_readings. Updated annually.'
+}
+
+Table usgs_groundwater_well_readings {
+  id             serial      [pk]
+  site_no        text        [not null, ref: > usgs_groundwater_wells.site_no, note: 'FK to usgs_groundwater_wells; CASCADE DELETE']
+  lev_dt         date        [not null, note: 'Date of measurement']
+  lev_va         numeric     [note: 'Depth to water, ft below land surface (positive = deeper); NULL for Dry/NoMeasurement readings']
+  parameter_code text        [note: 'USGS OGC API parameter code: 72019=standard DTW, 62610=calib electric tape, 62611=analog recorder, 72150=alt electric tape']
+  qualifier      text        [note: 'USGS OGC API qualifier: Static, Dry, Pumping, Flowing, Frozen, Obstructed, GWSWAffected, GWTideAffected, Saline, Revised, etc.']
+  created_at     timestamptz [default: `now()`]
+
+  indexes {
+    site_no                      [name: 'idx_gw_readings_site']
+    (lev_dt)                     [name: 'idx_gw_readings_date']
+    (site_no, lev_dt, qualifier) [unique, name: 'uq_gw_readings_site_date_qual']
+  }
+
+  Note: 'All discrete groundwater level readings for the past 3 years per well, from api.waterdata.usgs.gov OGC field-measurements API. All four depth-to-water parameter codes (72019, 62610, 62611, 72150) are fetched. All readings retained regardless of qualifier so users can see Dry/Pumping/Flowing conditions. Source: USGS NWIS OGC API.'
+}
+
+// ============================================================
+// USGS Hydrogeologic Framework (migration 017)
+// ============================================================
+
+Table usgs_hydrogeologic_provinces {
+  id          serial  [pk]
+  prov_name   text    [not null, note: 'e.g. "Coastal Plain", "Central Interior", "Basin and Range and Rio Grande Rift"']
+  geom        geometry(MultiPolygon, 4326) [not null]
+  source_year smallint [default: 2025]
+  created_at  timestamptz [default: `now()`]
+
+  indexes {
+    geom [type: gist, name: 'idx_hydro_provinces_geom']
+  }
+
+  Note: '8 broad hydrogeologic provinces covering all CONUS. Source: USGS ScienceBase item 6807cab6d4be020d8168d576 (published 2025-07-28). NAD83(2011)/Conus Albers reprojected to EPSG:4326 on load.'
+}
+
+Table usgs_hydrogeologic_regions {
+  id          serial  [pk]
+  reg_name    text    [not null, note: 'e.g. "High Plains aquifer", "Nebraska Sand Hills"']
+  reg_code    text    [note: 'USGS national aquifer code, e.g. "N100HGHPLN"']
+  reg_type    text    [note: '"PA" = Principal Aquifer; "SHR" = Secondary Hydrogeologic Region (fills unmapped gaps)']
+  lithology   text    [note: 'e.g. "Unconsolidated sand and gravel aquifers", "Carbonate-rock aquifers"']
+  geom        geometry(MultiPolygon, 4326) [not null]
+  source_year smallint [default: 2025]
+  created_at  timestamptz [default: `now()`]
+
+  indexes {
+    geom     [type: gist, name: 'idx_hydro_regions_geom']
+    reg_type [name: 'idx_hydro_regions_type']
+  }
+
+  Note: '126 named hydrogeologic regions covering all CONUS with no gaps: 57 Principal Aquifer (PA) polygons + 69 Secondary Hydrogeologic Regions (SHR) that fill unmapped areas. Together with provinces provides full CONUS hydrogeologic context. Source: USGS ScienceBase item 6863356fd4be025653d31f4d (published 2025-12-19).'
+}

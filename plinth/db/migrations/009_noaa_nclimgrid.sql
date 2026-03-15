@@ -1,0 +1,24 @@
+-- Migration 009: NOAA NClimGrid gridded climate normals (1991-2020)
+--
+-- The NClimGrid dataset is stored as 4 Cloud-Optimized GeoTIFF (COG) files in
+-- MinIO (one per variable: tmax, tmin, tavg, prcp), each with 12 bands (one
+-- per calendar month, Jan=1 … Dec=12). All 4 tiles are registered in the
+-- existing raster_tiles table — no new tables are required.
+--
+-- MinIO key pattern:  noaa-nclimgrid/1991-2020/{variable}.tif
+--   e.g. noaa-nclimgrid/1991-2020/tavg.tif
+--
+-- Variables:
+--   tavg — monthly mean temperature (°C)
+--   tmax — monthly mean maximum temperature (°C)
+--   tmin — monthly mean minimum temperature (°C)
+--   prcp — monthly total precipitation (mm)
+--
+-- Resolution: 1/24° (~5 km) for CONUS
+-- Source: NOAA NCEI / AWS S3 open data (s3://noaa-normals-pds/)
+-- Refresh: Decadal (next update ~2032 for 2001-2030 normals)
+
+-- No DDL changes needed — raster_tiles already holds this metadata.
+-- This migration is intentionally a no-op DDL file that serves as a schema
+-- change log entry only.
+SELECT 1;
