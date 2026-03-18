@@ -1,0 +1,414 @@
+PLINTH PROJECT COMPREHENSIVE STRUCTURE
+Last updated: 2026-03-18
+
+═══════════════════════════════════════════════════════════════════════════════
+1. FULL DIRECTORY STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+plinth/                    # Root project directory
+├── .env                   # Environment variables (local, not committed)
+├── .env.example           # Example environment template (committed)
+├── .git/                  # Git repository
+├── .github/               # GitHub workflows
+├── .gitignore
+├── .pytest_cache/         # Pytest cache
+├── .venv/                 # Virtual environment (uv-managed)
+├── Dockerfile.worker      # Docker image for ingestion/report workers
+├── README.md
+├── docker-compose.override.yml  # Local dev overrides
+├── docker-compose.yml     # Main compose file (postgres, minio, prefect)
+├── docs/                  # Documentation and plans
+├── plinth/                # Main Python package
+├── plinth_demo.pdf        # Demo report PDF
+├── pyproject.toml         # Project metadata (uv-managed)
+├── scripts/               # Bootstrap and helper scripts
+├── staging/               # Staging directory for large downloads (Docker volume)
+├── tests/                 # Test suite
+└── uv.lock                # Locked dependencies (uv)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2. PLINTH/ MODULES (ALL FILES - 87 Python files)
+═══════════════════════════════════════════════════════════════════════════════
+
+CORE PACKAGE:
+├── __init__.py
+├── config.py                      # Pydantic settings, all env config
+
+DATABASE LAYER (plinth/db/):
+├── __init__.py
+├── connection.py                  # PostgreSQL/PostGIS connection management
+├── cache.py                       # Query result caching (query_cache table)
+├── registry.py                    # Data registry / metadata tracking
+└── migrations/                    # SQL schema migrations (18 files)
+    ├── 001_foundation.sql         # Initial schema: core tables, indexes, raster_tiles
+    ├── 002_phase2_vectors.sql     # Phase 2 vector tables (TIGER, NHD, IECC, etc.)
+    ├── 003_fix_drclassdcd.sql     # Bug fix for SSURGO drclassdcd field
+    ├── 004_noaa_normals.sql       # NOAA climate normals table
+    ├── 005_fcc_broadband.sql      # FCC broadband availability table
+    ├── 006_ssurgo_expansion.sql   # SSURGO muaggatt + cointerp engineering table
+    ├── 007_api_to_local.sql       # Bulk local storage for 7 previously-API sources
+    ├── 008_drop_fcc_availability.sql  # Schema cleanup
+    ├── 009_noaa_nclimgrid.sql     # NOAA NClimGrid gridded normals raster table
+    ├── 010_eia_power.sql          # EIA power plants, service territories, substations,
+    │                              #   transmission lines
+    ├── 011_water_utilities.sql    # EPA SDWIS water systems + service area boundaries
+    ├── 012_groundwater.sql        # USGS groundwater wells + principal aquifers
+    ├── 013_noaa_normals_expand.sql  # 18 new parameter columns on noaa_climate_normals
+    ├── 014_groundwater_readings.sql # USGS discrete well readings (DTW history)
+    ├── 015_gw_readings_qualifier.sql  # lev_va_qualifier column
+    ├── 016_gw_readings_parameter_code.sql  # parameter_code column + composite index
+    ├── 017_hydrogeologic_framework.sql  # USGS hydrogeologic provinces + regions (2025)
+    └── 018_hydrogeologic_descriptions.sql  # 126-row description lookup table
+
+CLI LAYER (plinth/cli/ - 11 modules):
+├── __init__.py                    # Click CLI entry point (plinth-cli)
+├── db.py                          # Database commands (migrate, init, reset)
+├── ingest.py                      # Ingest orchestration (28 subcommands)
+├── query.py                       # Direct query execution
+├── cache.py                       # Cache management
+├── raster.py                      # Raster operations
+├── report.py                      # Report generation + timing display
+├── verify.py                      # Data verification/validation
+├── infra.py                       # Infrastructure commands
+└── flows.py                       # Prefect flow management
+
+INGEST LAYER (plinth/ingest/ - 30 files):
+├── __init__.py
+├── base.py                        # BaseIngestor abstract class
+├── census_acs_bulk.py             # Census ACS 5-year summary (bulk)
+├── census_tiger.py                # Census TIGER boundaries (block groups, tracts)
+├── eia_860.py                     # EIA-860 power plants + generator capacity
+├── epa_aqs_bulk.py                # EPA AQS air quality (bulk CSV)
+├── epa_sdwis.py                   # EPA SDWIS public water systems
+├── epa_water_boundaries.py        # EPA water system service area boundaries
+├── fcc_broadband.py               # FCC BDC fixed broadband availability
+├── fema_nfhl.py                   # FEMA NFHL flood zones (national-scale architecture,
+│                                  #   ThreadPoolExecutor, dynamic county list)
+├── fema_nri.py                    # FEMA National Risk Index (tract-level)
+├── hifld_electric_territories.py  # HIFLD electric utility service territories
+├── hifld_substations.py           # HIFLD electric substations
+├── hifld_transmission_lines.py    # HIFLD high-voltage transmission lines
+├── hydroframe_wtd.py              # HydroFrame WTD (legacy, superseded by ma_wtd)
+├── iecc.py                        # IECC building code climate zones
+├── ma_wtd.py                      # Ma et al. (2025) 1-arcsec CONUS water table depth
+│                                  #   model COG (~35 GB source, ~46 GB COG output)
+├── nasa_power_bulk.py             # NASA POWER climate/solar data (regional API)
+├── nhd.py                         # NHDPlus HR (flowlines, waterbodies)
+├── nlcd.py                        # NLCD land cover classification (COG)
+├── noaa_nclimgrid.py              # NOAA NClimGrid-Monthly 1991-2020 gridded normals
+│                                  #   (tmin, tmax, tavg, prcp — 5km COGs)
+├── noaa_normals.py                # NOAA Climate Normals 1991-2020 station data
+│                                  #   (expanded to 22+ parameters)
+├── soilgrids_bedrock.py           # SoilGrids BDRICM + BDRLOG (ISRIC 2017, 250m COGs)
+│                                  #   BDRICM = absolute bedrock depth (cm, capped 200)
+│                                  #   BDRLOG = probability bedrock within 2m
+├── ssurgo.py                      # SSURGO soil surveys (NRCS Web Soil Survey)
+├── usda_whp_raster.py             # USDA wildfire hazard potential (COG)
+├── usgs_3dep.py                   # USGS 3DEP DEM (10m, COG)
+├── usgs_aquifers.py               # USGS Principal Aquifers (national shapefile)
+├── usgs_earthquakes_bulk.py       # USGS earthquake events (ComCat bulk)
+├── usgs_groundwater_wells.py      # USGS NWIS groundwater well inventory + 20-year
+│                                  #   discrete depth-to-water readings
+├── usgs_hydrogeologic_framework.py  # USGS 2025 hydrogeologic provinces (8) + regions
+│                                    #   (126, full CONUS coverage)
+├── usgs_seismic_raster.py         # USGS NSHM 2023 seismic PGA (COG)
+└── api/ (7 API client modules - current + legacy)
+    ├── __init__.py
+    ├── census_acs.py              # Census API client (retained for bulk ingestor)
+    └── legacy/                    # Deprecated API clients (pre-bulk-migration)
+        ├── __init__.py
+        ├── epa_aqs.py
+        ├── fcc_broadband.py
+        ├── nasa_power.py
+        ├── usda_whp.py
+        ├── usgs_earthquakes.py
+        └── usgs_seismic.py
+
+QUERY LAYER (plinth/query/ - 19 modules):
+├── __init__.py
+├── census_demographics.py         # Census ACS block group demographic queries
+├── earthquakes.py                 # USGS earthquake events (M≥3.0, radius)
+├── electric_infrastructure.py     # EIA/HIFLD: utility territory, substations,
+│                                  #   transmission lines, nearest generators
+├── elevation.py                   # DEM elevation sampling (3DEP COG)
+├── epa_aqs.py                     # EPA air quality index / pollutant data
+├── fcc_broadband.py               # FCC broadband availability (PostGIS lookup)
+├── fema_nri.py                    # FEMA National Risk Index composite scores
+├── flood_zone.py                  # FEMA flood zone classification
+├── hydro.py                       # NHD waterbodies and flowlines (nearest feature)
+├── iecc_zone.py                   # IECC climate zone classification
+├── land_cover.py                  # NLCD land cover type (COG sample)
+├── nasa_power.py                  # NASA POWER solar/climate normals
+├── noaa_nclimgrid.py              # NOAA NClimGrid gridded climate normals (COG sample)
+├── noaa_normals.py                # NOAA station climate normals (expanded parameters)
+├── seismic_pga.py                 # USGS seismic PGA hazard (COG sample)
+├── slope.py                       # Terrain slope (derived from 3DEP COG)
+├── soil.py                        # SSURGO soil properties (15+ fields)
+├── water_infrastructure.py        # EPA SDWIS water systems, USGS principal aquifers,
+│                                  #   USGS monitoring wells + DTW history, Ma WTD,
+│                                  #   USGS hydrogeologic province + region
+└── wildfire_whp.py                # USDA wildfire hazard potential
+
+RASTER LAYER (plinth/raster/ - 5 modules):
+├── __init__.py
+├── cog.py                         # Cloud-Optimized GeoTIFF conversion
+├── clip.py                        # Bounding-box clipping + buffer
+├── minio.py                       # MinIO S3-compatible upload/download/presign
+└── index.py                       # Tile indexing (raster_tiles table)
+
+REPORT LAYER (plinth/report/ - 5 modules + templates):
+├── __init__.py
+├── context.py                     # Report data collection (calls all 19 query modules)
+├── maps.py                        # Mapbox Static Images API map generation
+├── mock_data.py                   # Test/mock data for template development
+├── render.py                      # WeasyPrint HTML→PDF rendering engine
+├── templates/
+│   └── report.html                # Jinja2 report template (~1,400 lines)
+└── static/
+    └── report.css                 # Report stylesheet
+
+WORKFLOW LAYER (plinth/flows/ - 6 modules):
+├── __init__.py
+├── ingest_all.py                  # Master ingest orchestration (Prefect)
+├── refresh_annual.py              # Annual refresh cycle
+├── refresh_fema.py                # FEMA-specific refresh
+├── cache_expire.py                # Cache expiration scheduler
+└── check_staleness.py             # Data staleness monitoring
+
+
+═══════════════════════════════════════════════════════════════════════════════
+3. TESTS/ (stubbed)
+═══════════════════════════════════════════════════════════════════════════════
+
+tests/
+├── conftest.py                    # Pytest configuration, fixtures, test DB setup
+├── test_ingest/                   # Ingestor unit tests (placeholder, .gitkeep)
+└── test_raster/                   # Raster operation tests (placeholder, .gitkeep)
+
+Current status: Minimal test coverage (conftest defined, test directories stubbed)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+4. DOCS/PLANS/ — PLANNING DOCUMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+A) 2026-02-28-POC-Plan.md
+   • Master POC implementation plan
+   • Hardware recommendations (8-core min, 64 GB recommended for national scale)
+   • Phase 0–4: Infrastructure, ingestion pipeline, report generation
+   • Stack: Python (uv), FastAPI, PostgreSQL 15 + PostGIS, MinIO, Prefect, Mapbox
+
+B) 2026-03-10-ssurgo-expansion.md
+   • Expand SSURGO soil section from 5 to 15+ fields
+   • Added muaggatt columns: flood frequency, water table depth, bedrock depth, etc.
+   • Added engineering suitability via sdm cointerp (shrink-swell, corrosivity, etc.)
+
+C) 2026-03-11-API-to-local-store-migration.md
+   • Eliminated 7 runtime API dependencies by bulk-ingesting to local tables/COGs
+   • Sources: Census ACS, EPA AQS, FCC Broadband, NASA POWER, USDA WHP,
+              USGS Earthquakes, USGS Seismic PGA
+   • Result: Report generation went from ~4 min to ~33 seconds
+
+D) 2026-03-11-New-Data-Sources-Plan.md
+   • Added 4 new data domains: NOAA NClimGrid, EIA power infrastructure,
+     EPA SDWIS water utilities, USGS groundwater
+   • Includes report section designs for electric (6B) and water (7C)
+
+E) 2026-03-13-Power-Plan.md
+   • Detailed implementation plan for electric infrastructure section
+   • EIA-860 generators, HIFLD territories/substations/transmission lines
+   • Report section 6B: utility territory, nearest substation, transmission
+     lines, generator capacity summary
+
+F) 2026-03-13-Water-Plan.md
+   • Detailed implementation plan for water & utility infrastructure section
+   • SDWIS service areas, USGS wells + DTW, Ma WTD modeled depth
+   • Report section 7C-A (public water supply) and 7C-B (groundwater context)
+
+G) 2026-03-14-Additional-Water-Additional-Data-Sources.md
+   • FEMA NFHL national expansion (architecture only; data limited to OK)
+   • USGS 2025 Hydrogeologic Framework (8 provinces, 126 regions, full CONUS)
+   • SoilGrids depth to bedrock (BDRICM + BDRLOG, 250m COGs)
+   • Query/report integration deferred to follow-on plan
+
+
+═══════════════════════════════════════════════════════════════════════════════
+5. DATABASE TABLES (37 tables, ~11 GB PostGIS)
+═══════════════════════════════════════════════════════════════════════════════
+
+INFRASTRUCTURE:
+  schema_migrations               — applied migration tracking
+  data_source_registry            — one row per dataset (version, last_downloaded,
+                                    next_review_date, coverage_region, notes)
+  query_cache                     — TTL cache for API-sourced query results
+  raster_tiles                    — spatial index of all COG tiles in MinIO
+  report_archive                  — generated report history + source versions
+
+CENSUS / DEMOGRAPHICS:
+  census_block_groups             — TIGER block group polygons (NE Oklahoma, ~3,374)
+  census_tracts                   — TIGER tract polygons (~1,205)
+  acs_block_group_data            — ACS 5-year demographic estimates (~246K rows, 5.4 GB)
+
+ENVIRONMENTAL / HAZARD:
+  fema_flood_zones                — NFHL flood zone polygons (NE Oklahoma, ~40K rows)
+  fema_unmapped_areas             — county boundary minus flood zones (unmapped flag)
+  fema_nri                        — FEMA National Risk Index composite risk scores
+  usgs_earthquake_events          — USGS ComCat M≥3.0 events (~12.9K rows)
+  iecc_climate_zones              — IECC building code climate zones
+
+SOIL / TERRAIN:
+  ssurgo_mapunits                 — SSURGO soil map units
+  ssurgo_component                — SSURGO component data
+  ssurgo_muaggatt                 — SSURGO map unit aggregated attributes
+  ssurgo_cointerp_engr            — SSURGO engineering interpretation rules
+
+WATER / HYDROLOGY:
+  nhd_flowlines                   — NHDPlus HR stream centerlines (~15.8K rows)
+  nhd_waterbodies                 — NHDPlus HR waterbody polygons (~373 rows)
+  sdwis_water_systems             — EPA SDWIS public water systems (~96.9K rows)
+  water_system_boundaries         — EPA ECHO service area polygons (~44.6K rows, 517 MB)
+  usgs_groundwater_wells          — USGS NWIS well site inventory (~915K rows, 536 MB)
+  usgs_groundwater_well_readings  — Discrete DTW readings, 20-year history
+                                    (~1.4M rows, 674 MB)
+  usgs_principal_aquifers         — USGS national principal aquifer polygons (~4.6K rows)
+  usgs_hydrogeologic_provinces    — USGS 2025 hydrogeologic provinces (8 rows)
+  usgs_hydrogeologic_regions      — USGS 2025 hydrogeologic regions (126 rows, full CONUS)
+  usgs_hydrogeologic_region_descriptions  — 126 AEC-focused descriptions (lookup table)
+
+CLIMATE / ATMOSPHERE:
+  noaa_climate_normals            — NOAA 1991-2020 station normals (22+ parameters,
+                                    ~15.6K stations)
+  nasa_power_climatology          — NASA POWER regional climate/solar grid (~585 rows)
+  epa_aqs_sites                   — EPA AQS monitoring site metadata (~2.7K rows)
+  epa_aqs_annual_summary          — EPA AQS annual pollutant summaries (~297K rows)
+
+ELECTRIC / POWER:
+  eia_power_plants                — EIA-860 generating plants (~16.1K rows)
+  electric_service_territories    — HIFLD utility service territory polygons
+                                    (~2.9K rows, 100 MB)
+  electric_substations            — HIFLD substations (~10.9K rows)
+  electric_transmission_lines     — HIFLD transmission lines (~52.2K rows)
+
+BROADBAND:
+  fcc_broadband_coverage          — FCC BDC fixed broadband by census block
+                                    (~8.4M rows, 2.5 GB)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+6. RASTER / COG STORAGE (MinIO, ~47 GB)
+═══════════════════════════════════════════════════════════════════════════════
+
+All rasters are Cloud-Optimized GeoTIFFs stored in MinIO.
+Key: {dataset}/{version}/{tile_id}.tif
+
+  usgs-3dep/         — USGS 3DEP 10m DEM (NE Oklahoma)
+  usgs-seismic/      — USGS NSHM 2023 seismic PGA (NE Oklahoma)
+  nlcd/              — NLCD 2021 land cover (NE Oklahoma)
+  usda-whp/          — USDA wildfire hazard potential (NE Oklahoma)
+  noaa-nclimgrid/    — NOAA NClimGrid 1991-2020 (tmin/tmax/tavg/prcp, national COGs)
+  ma-wtd/            — Ma et al. (2025) CONUS water table depth (~46 GB COG)
+  soilgrids-bedrock/ — ISRIC SoilGrids bedrock depth:
+                         bdricm_conus.tif — absolute depth cm, 250m, 53 MB
+                         bdrlog_conus.tif — probability within 2m, 250m, 138 MB
+
+Staging volume: ~101 GB (source downloads retained for ETag-based re-run idempotency)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+7. REPORT SECTIONS (current template)
+═══════════════════════════════════════════════════════════════════════════════
+
+Section 1  — Site Identification (address, coordinates, parcel context)
+Section 2  — Climate & Energy (IECC zone, NOAA normals 22+ params, NClimGrid,
+              NASA POWER solar, heating/cooling degree days)
+Section 3  — Flood & Water Hazard (FEMA flood zone, BFE, SFHA, mapped status)
+Section 4  — Soil Conditions (SSURGO 15+ fields: drainage, texture, engineering
+              suitability, shrink-swell, corrosivity, flood frequency)
+Section 5  — Seismic & Natural Hazards (USGS PGA, earthquake history,
+              USDA wildfire WHP, FEMA NRI composite risk)
+Section 6  — Site Characteristics (elevation, slope, land cover, NHD hydro,
+              census demographics)
+Section 6B — Electric & Power Infrastructure (utility territory, nearest
+              substation, transmission lines, nearest generating plants)
+Section 7  — Air Quality (EPA AQS AQI, PM2.5, ozone, CO, NO2, SO2)
+Section 7C-A — Water & Utility Infrastructure (SDWIS water system provider,
+               source type, service area, violation history)
+Section 7C-B — Groundwater Context (principal aquifer, hydrogeologic province
+               + region + description, Ma WTD modeled depth, USGS monitoring
+               wells with DTW statistics and recent discrete readings)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+8. KEY CONVENTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+INGESTOR CONTRACT (BaseIngestor):
+  1. download()   — idempotent; ETag/content-hash check, never re-download unchanged
+  2. validate()   — file integrity + record count sanity check
+  3. load()       — upsert (INSERT ... ON CONFLICT DO UPDATE); never TRUNCATE + INSERT
+  4. register()   — upsert row in data_source_registry
+
+RASTER STORAGE:
+  - All rasters stored as COGs in MinIO
+  - MinIO key: {dataset}/{version}/{tile_id}.tif
+  - PostGIS holds only tile index (raster_tiles), not raster data
+  - When computing slope from DEM: buffer clip by ≥1 grid cell (~10m) before
+    gdal.DEMProcessing to avoid edge artifacts
+  - Files > 4 GB require BIGTIFF=YES in gdalwarp
+
+QUERY CACHE:
+  - Dataset-specific compound key strings (not flat proximity hashes):
+    nasa-power:{grid_cell_id}:{param_hash}:{date_range}
+    epa-aqs:{county_fips}:{year}
+    usgs-eq:{grid_cell_100km}:{start_year}:{mag_threshold}
+  - TTLs: NASA POWER 30d, EPA AQS 365d, USGS earthquakes 30d, FCC 90d
+
+FEMA FLOOD DATA:
+  - fema_unmapped_areas is mandatory — a site with no flood data must NEVER
+    appear as Zone X; ~15-20% of US has no FEMA mapping
+  - USGS aquifer code 999 ("Other rocks") is a filler polygon meaning
+    "not a principal aquifer" — excluded from all aquifer lookups
+
+FCC BROADBAND:
+  - BDC API uses HTTP/2; httpx+h2 triggers server-side stream resets
+  - Ingestor uses subprocess+curl workaround (see fcc_broadband.py)
+  - Query uses functional index on LEFT(block_geoid, 12) — critical for
+    performance (1.7s → 0.03s without the index)
+
+REPORT OUTPUT CONSTRAINTS:
+  - Present raw data values only — no derived risk ratings or suitability scores
+  - FEMA NRI results must be labeled "Source: FEMA National Risk Index"
+  - FCC broadband requires mandatory ISP self-reporting disclaimer
+  - Every API-sourced field has a defined failure behavior (inline flag,
+    never silent blank, never error)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+9. ENVIRONMENT VARIABLES (see .env.example)
+═══════════════════════════════════════════════════════════════════════════════
+
+  MAPBOX_TOKEN          — Mapbox Static Images API (maps in report)
+  CENSUS_API_KEY        — Census Bureau API
+  EPA_AQS_KEY           — EPA AQS API key
+  EPA_AQS_EMAIL         — EPA AQS account email
+  POSTGRES_PASSWORD     — PostGIS database password
+  MINIO_ACCESS_KEY      — MinIO access key
+  MINIO_SECRET_KEY      — MinIO secret key
+
+
+═══════════════════════════════════════════════════════════════════════════════
+10. CANONICAL TEST INPUT
+═══════════════════════════════════════════════════════════════════════════════
+
+  Address:   11822 E 116th St N, Collinsville, OK 74021
+  Lat/Lon:   36.32197414685, -95.842032856739
+  County:    Tulsa County, OK (FIPS 40143)
+  NHDPlus:   VPU 11 (Arkansas-White-Red)
+  IECC Zone: 3A (Warm Humid)
+  Aquifer:   Not within a principal aquifer (nearest: Ada-Vamoosa, ~24 mi)
+  Hydro region: Interior Pennsylvanian (Central Interior province)
+  Flood zone: Zone X (NE Oklahoma data loaded)
+
+  Run: uv run plinth-cli report generate --address "11822 E 116th St N, Collinsville, OK"
+  Expected total time: ~33 seconds (maps dominate at ~27s)

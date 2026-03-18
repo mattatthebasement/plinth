@@ -182,30 +182,30 @@ A Mapbox Static Image showing:
 ## Implementation Plan
 
 ### Phase 1: Query Layer
-- [ ] Create `plinth/query/electric_infrastructure.py`
+- [x] Create `plinth/query/electric_infrastructure.py`
   - `query_electric_infrastructure(lat, lon)` returning:
     - `service_territories` list (usually 1, sometimes 2)
     - `nearest_substations` list (top 3 within 15 mi, filtered to real names when available)
     - `transmission_lines` grouped by voltage class (nearest in each class within 10 mi)
     - `nearby_plants` list (top 5 nearest operating, within 25 mi) + `capacity_by_fuel` dict
-- [ ] Register in `plinth/query/__init__.py`
+- [x] Register in `plinth/query/__init__.py`
 
 ### Phase 2: Context Builder
-- [ ] Add `_build_electric_infrastructure(elec_q)` to `plinth/report/context.py`
-- [ ] Add call to `build_report_context()`
+- [x] Add `_build_electric_infrastructure(elec_q)` to `plinth/report/context.py`
+- [x] Add call to `build_report_context()`
 
 ### Phase 3: Map
-- [ ] Add `_electric_infrastructure_map(lat, lon, elec_q)` to map utilities
-- [ ] Layers: territory boundary, tx lines (by voltage), substations, plants
+- [x] Add `_electric_infrastructure_map(lat, lon, elec_q)` to map utilities
+- [x] Layers: territory boundary, tx lines (by voltage), substations, plants
 
 ### Phase 4: Template
-- [ ] Add Section 7B "Electrical Infrastructure" to `report.html` after broadband
-- [ ] Utility provider kv-grid
-- [ ] Substations table
-- [ ] Transmission lines by voltage class kv-grid
-- [ ] Nearby plants table + fuel summary
-- [ ] Map
-- [ ] Inline disclaimer (HIFLD data quality caveat, EIA data year)
+- [x] Add Section 7B "Electrical Infrastructure" to `report.html` after broadband
+- [x] Utility provider kv-grid
+- [x] Substations table
+- [x] Transmission lines by voltage class kv-grid
+- [x] Nearby plants table + fuel summary
+- [x] Map
+- [x] Inline disclaimer (HIFLD data quality caveat, EIA data year)
 
 ### Phase 5: Data Sources section
 
